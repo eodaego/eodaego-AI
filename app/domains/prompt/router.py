@@ -19,21 +19,21 @@ router = APIRouter(
 
 @router.post("", response_model=PromptTemplateResponse, status_code=status.HTTP_201_CREATED)
 def create_prompt(
-    data: PromptTemplateCreate, db: Session = Depends(get_db)  # noqa: B008
+    data: PromptTemplateCreate, db: Session = Depends(get_db)
 ) -> PromptTemplateResponse:
     prompt = service.create_prompt_template(db, data)
     return PromptTemplateResponse.model_validate(prompt)
 
 
 @router.get("", response_model=list[PromptTemplateResponse])
-def list_prompts(db: Session = Depends(get_db)) -> list[PromptTemplateResponse]:  # noqa: B008
+def list_prompts(db: Session = Depends(get_db)) -> list[PromptTemplateResponse]:
     prompts = service.list_prompt_templates(db)
     return [PromptTemplateResponse.model_validate(p) for p in prompts]
 
 
 @router.patch("/{prompt_id}", response_model=PromptTemplateResponse)
 def update_prompt(
-    prompt_id: int, data: PromptTemplateUpdate, db: Session = Depends(get_db)  # noqa: B008
+    prompt_id: int, data: PromptTemplateUpdate, db: Session = Depends(get_db)
 ) -> PromptTemplateResponse:
     prompt = service.get_prompt_template(db, prompt_id)
     if prompt is None:
@@ -44,7 +44,7 @@ def update_prompt(
 
 
 @router.delete("/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_prompt(prompt_id: int, db: Session = Depends(get_db)) -> None:  # noqa: B008
+def delete_prompt(prompt_id: int, db: Session = Depends(get_db)) -> None:
     prompt = service.get_prompt_template(db, prompt_id)
     if prompt is None:
         detail = "prompt template not found"
