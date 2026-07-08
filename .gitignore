@@ -1,4 +1,6 @@
 .idea
 docs/
 .superpowers/
+.issue/
+.report/
 .DS_Store
