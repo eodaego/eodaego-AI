@@ -4,3 +4,25 @@ docs/
 .issue/
 .report/
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# uv
+.venv/
+
+# 환경변수 (실제 시크릿 파일은 커밋하지 않음, .env.example만 추적)
+.env
+.env.*
+!.env.example
+
+# 테스트/린트/타입체크 캐시
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
