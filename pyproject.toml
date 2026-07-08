@@ -33,6 +33,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+# alembic/ 디렉터리(마이그레이션 스크립트 위치)가 프로젝트 루트에 있어 isort가
+# alembic 패키지를 first-party로 오인하는 것을 방지
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
