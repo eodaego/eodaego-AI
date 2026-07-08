@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -7,6 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domains.crawling.model import ScheduleConfig
+
+logger = logging.getLogger(__name__)
 
 JobRegistry = dict[str, Callable[[], None]]
 
@@ -33,5 +36,17 @@ def bootstrap_scheduler(
         job_fn = job_registry.get(schedule_config.job_id)
         if job_fn is None:
             continue
-        trigger = build_trigger(schedule_config.trigger_type, schedule_config.trigger_config)
-        scheduler.add_job(job_fn, trigger=trigger, id=schedule_config.job_id, replace_existing=True)
+        try:
+            trigger = build_trigger(schedule_config.trigger_type, schedule_config.trigger_config)
+            scheduler.add_job(
+                job_fn, trigger=trigger, id=schedule_config.job_id, replace_existing=True
+            )
+        except Exception:
+            # 잘못된 trigger_config로 앱 기동 전체가 실패하지 않도록 개별 job 실패를 격리한다.
+            logger.warning(
+                "스케줄 등록 실패, 건너뜀: job_id=%s trigger_type=%s trigger_config=%s",
+                schedule_config.job_id,
+                schedule_config.trigger_type,
+                schedule_config.trigger_config,
+                exc_info=True,
+            )
