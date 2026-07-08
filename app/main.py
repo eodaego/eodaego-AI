@@ -5,11 +5,14 @@ from sqlalchemy import text
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.session import get_engine
+from app.domains.prompt.router import router as prompt_router
 
 configure_logging()
 
 app = FastAPI(title="eodaego-ai")
 register_exception_handlers(app)
+
+app.include_router(prompt_router)
 
 
 @app.get("/health")
