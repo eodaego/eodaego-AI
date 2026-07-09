@@ -77,37 +77,36 @@
 - PR 제목 규칙:
   - 형식: `[브랜치명] : [타입] : [설명] [이슈링크]`
   - 타입: `feat` (기능), `fix` (버그), `refactor`, `chore`, `docs`
-  - 예시: `주문_완료_페이지_개발 : feat : OrderDetailPage 컴포넌트 추가 https://github.com/waitee-v2/waitee-v2-fe/issues/205`
-  - 현재 프로젝트의 실제 커밋 메시지 패턴 참고: `git log` 확인
+  - 예시: `eodaego_ai_FastAPI_프로젝트_초기_스캐폴딩_구축 : feat : Dockerfile을 uv 기반 Python 3.12·포트 8000 구성으로 교체 https://github.com/eodaego/eodaego-AI/issues/1`
+  - 브랜치명·커밋 메시지는 이슈 코멘트의 helper 블록(Chuseok22 issue-helper Action이 이슈 생성 시 자동 추가)을 그대로 사용한다 — 현재 프로젝트의 실제 커밋 메시지 패턴 참고: `git log` 확인
 
 - PR 본문 구조:
   - `.report/` 에 저장된 보고서 내용을 기반으로 작성
   - 변경 목적, 주요 변경 파일, 검증 결과 포함
-  - 스크린샷 (UI 변경 시)
+  - 스크린샷: 해당 없음(API 전용 서버, UI 없음). Swagger UI/curl 검증 결과가 있으면 첨부
 
 - reviewer 지정 방식:
   - 팀 내 규칙에 따름 (미정의)
 
 - linked issue 규칙:
   - PR 제목 또는 본문에 이슈 URL 포함
-  - 현재 패턴: `https://github.com/waitee-v2/waitee-v2-fe/issues/[번호]`
+  - 현재 패턴: `https://github.com/eodaego/eodaego-AI/issues/[번호]`
 
 ## Delivery constraints
 
 - 배포 전 확인 사항:
-  - `npm run lint` — 0 errors
-  - `npm run build` — TypeScript 에러 없음, 빌드 성공
-  - (테스트 도입 후) `npx vitest run` — 전체 PASS
-  - Capacitor 빌드: `npx cap sync` → 네이티브 프로젝트 동기화
-  - 환경변수 (`VITE_API_BASE_URL`, `VITE_IMAGE_BASE_URL`, 결제 URL) 설정 확인
+  - `uv run ruff check .` — 0 errors
+  - `uv run ruff format .` — 포맷 적용 완료
+  - `uv run mypy app` — strict 통과, 에러 없음
+  - (테스트 코드 미작성 정책 — `30-testing-and-verification.md` 참고)
+  - `docker build -t eodaego-ai .` — 빌드 성공 확인
+  - 환경변수(`APP_ENV`, `INTERNAL_API_KEY`, `DATABASE_URL`) `.env.local`/`.env.production` 및 CI `secrets.ENV_FILE` 설정 확인
+  - CI(`python-server-cicd.yml`) 배포 시 `-p` 옵션 없이 `eodaego-internal` 네트워크로만 join되는지 확인
 
 - feature flag 정책:
-  - 현재 미사용. 필요 시 도입 기준:
-    - 완성되지 않은 기능이 main 브랜치에 머지되어야 하는 경우
-    - A/B 테스트가 필요한 경우
+  - 현재 미사용. 내부 전용 CRUD/추천 API로 사용자 대상 A/B 테스트 대상이 아니라 도입 필요성이 낮음.
 
 - rollback 필요 시 기준:
-  - 결제 흐름 (PG, PAYCO, Voucher) 에서 오류 발생 시 즉시 롤백
-  - 인증(로그인, 토큰) 흐름 장애 시 즉시 롤백
-  - 앱 크래시 또는 빈 화면 발생 시 즉시 롤백
-  - 롤백 방법: 이전 커밋으로 revert PR 생성
+  - `GET /health`가 503을 반환하거나 컨테이너가 기동에 실패하는 경우 즉시 롤백
+  - `X-Internal-Api-Key` 인증 또는 `eodaego-internal` 네트워크 격리 설정 오류로 BE 연동이 끊긴 경우 즉시 롤백
+  - 롤백 방법: 이전 커밋으로 revert PR 생성 후 재배포, 또는 NAS에서 이전 DockerHub 이미지 태그로 재배포
