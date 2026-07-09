@@ -11,11 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROJECT_NAME: project-name
+  PROJECT_NAME: eodaego-ai
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  PORT: 8080
-  APP_PORT: 8080
-  MOUNT_DIR: "/volume/project/..."
+  DOCKER_NETWORK: eodaego-internal
 
 jobs:
   build:
@@ -79,9 +77,7 @@ jobs:
             PROJECT_NAME=${{ env.PROJECT_NAME }}
             CONTAINER_NAME=${{ env.PROJECT_NAME }}
             IMAGE=${{ env.DOCKERHUB_USERNAME }}/${{ env.PROJECT_NAME }}:${BRANCH}
-            PORT=${{ env.PORT }}
-            APP_PORT=${{ env.APP_PORT }}
-            MOUNT_DIR="${{ env.MOUNT_DIR }}"
+            NETWORK=${{ env.DOCKER_NETWORK }}
             WORKDIR="/opt/${PROJECT_NAME}/${BRANCH}"
             
             echo "브랜치: ${BRANCH}"
@@ -105,36 +101,22 @@ jobs:
             
             echo ".env 파일 구성"
             echo '${{ secrets.ENV_FILE }}' | sudo tee "${WORKDIR}/.env" > /dev/null
-            
+
+            echo "내부망 ${NETWORK} 존재 여부 확인 중..."
+            if ! sudo docker network inspect "${NETWORK}" >/dev/null 2>&1; then
+              echo "내부망 ${NETWORK} 이(가) 없어 새로 생성합니다."
+              echo $PW | sudo -S docker network create "${NETWORK}"
+            fi
+
             echo "새로운 컨테이너 ${CONTAINER_NAME} 실행 중..."
-            echo $PW | sudo -S docker run -d -p "${PORT}":"${APP_PORT}" --name "${CONTAINER_NAME}" \
+            # -p(포트 퍼블리시) 사용하지 않음 -> 호스트/외부에서 접근 불가, 내부망(${NETWORK})의 다른 컨테이너에서만 접근
+            echo $PW | sudo -S docker run -d --name "${CONTAINER_NAME}" \
+              --network "${NETWORK}" \
               -e TZ=Asia/Seoul \
               --env-file "${WORKDIR}/.env" \
               -v /etc/localtime:/etc/localtime:ro \
-              -v "${MOUNT_DIR}":/app \
               "${IMAGE}"
-            
-            echo "헬스체크 (최대 120회, 1초간격)"
-            for i in $(seq 1 120); do
-              if curl -fsS "http://127.0.0.1:${PORT}/actuator/health" >/dev/null 2>&1 || \
-                 curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null 2>&1 || \
-                 curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1 || \
-                 curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 || \
-                 curl -fsS "http://127.0.0.1:${PORT}/docs/swagger-ui/index.html" >/dev/null 2>&1 ; then
-                echo "헬스체크 성공 (시도 ${i})"
-                HEALTH_OK=1
-                break
-              fi  
-              echo "헬스체크 진행중... (시도 ${i}/120)"
-              sleep 1
-            done
-            
-            if [ "${HEALTH_OK:-0}" != "1" ]; then
-              echo "[오류] 헬스체크 실패 -> 배포 중단, 로그 출력"
-              echo "$PW" | sudo -S docker logs --tail=200 ${CONTAINER_NAME}
-              exit 1
-            fi
-            
+
             # <none> 태그로 남은 이미지 정리
             echo "불필요한 dangling(<none>) 이미지 정리..."
             echo $PW | sudo -S docker image prune -af

@@ -1,0 +1,21 @@
+.git/
+.github/
+.idea/
+.claude/
+.superpowers/
+.issue/
+.report/
+docs/
+
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# 실제 환경변수 파일은 이미지에 절대 포함하지 않음(--env-file로 런타임에 주입)
+.env
+.env.*
+
+.DS_Store
