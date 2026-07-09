@@ -108,6 +108,15 @@ jobs:
               echo $PW | sudo -S docker network create "${NETWORK}"
             fi
 
+            echo "DB 마이그레이션 적용 중..."
+            # 새 이미지로 1회성 컨테이너를 띄워 alembic upgrade head만 실행 후 제거(--rm)
+            # set -e 로 인해 마이그레이션 실패 시 아래 앱 컨테이너 기동 없이 배포가 즉시 중단됨
+            echo $PW | sudo -S docker run --rm \
+              --network "${NETWORK}" \
+              --env-file "${WORKDIR}/.env" \
+              "${IMAGE}" \
+              uv run alembic upgrade head
+
             echo "새로운 컨테이너 ${CONTAINER_NAME} 실행 중..."
             # -p(포트 퍼블리시) 사용하지 않음 -> 호스트/외부에서 접근 불가, 내부망(${NETWORK})의 다른 컨테이너에서만 접근
             echo $PW | sudo -S docker run -d --name "${CONTAINER_NAME}" \
