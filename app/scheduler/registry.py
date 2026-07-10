@@ -7,14 +7,20 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domains.catalog.service import crawl_catalog_job
 from app.domains.crawling.model import ScheduleConfig
+from app.domains.crawling.service import crawl_congestion_job
+from app.domains.facility.service import crawl_operating_hours_job
 
 logger = logging.getLogger(__name__)
 
 JobRegistry = dict[str, Callable[[], None]]
 
-# 실제 크롤링 job(congestion_job, catalog_job)은 후속 계획에서 등록한다.
-JOB_REGISTRY: JobRegistry = {}
+JOB_REGISTRY: JobRegistry = {
+    "crawl_congestion": crawl_congestion_job,
+    "crawl_catalog": crawl_catalog_job,
+    "crawl_operating_hours": crawl_operating_hours_job,
+}
 
 
 def build_trigger(trigger_type: str, trigger_config: str) -> IntervalTrigger | CronTrigger:
