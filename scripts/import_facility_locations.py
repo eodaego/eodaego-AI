@@ -1,6 +1,6 @@
 """서울어린이대공원 시설물 위치정보 xlsx 1회성 임포트 스크립트.
 
-실행: uv run python scripts/import_facility_locations.py
+실행: uv run python -m scripts.import_facility_locations
 매번 재실행해도 external_id 기준으로 중복 없이 upsert된다.
 """
 
