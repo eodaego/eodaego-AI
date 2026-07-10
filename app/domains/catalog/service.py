@@ -240,9 +240,7 @@ def sync_animal_locations(db: Session) -> None:
         if not animal_name or not location_name:
             continue
         normalized = animal_name.replace(" ", "")
-        animal = db.scalar(
-            select(Animal).where(func.replace(Animal.name, " ", "") == normalized)
-        )
+        animal = db.scalar(select(Animal).where(func.replace(Animal.name, " ", "") == normalized))
         if animal is not None:
             animal.location_name = location_name
     db.commit()
