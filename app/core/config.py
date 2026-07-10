@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_env: str = "local"
     internal_api_key: str
     database_url: str
+    seoul_open_api_key: str
+    data_go_kr_service_key: str
 
     model_config = SettingsConfigDict(env_file_encoding="utf-8")
 

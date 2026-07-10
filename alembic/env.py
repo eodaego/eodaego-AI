@@ -9,10 +9,15 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import get_settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
+from app.domains.catalog.model import Animal, Plant  # noqa: E402, F401
 from app.domains.crawling.model import (  # noqa: E402, F401
     CongestionSnapshot,
-    OperatingHoursSnapshot,
     ScheduleConfig,
+)
+from app.domains.facility.model import (  # noqa: E402, F401
+    AmusementRide,
+    Facility,
+    OperatingHoursSection,
 )
 from app.domains.prompt.model import PromptTemplate  # noqa: E402, F401
 
