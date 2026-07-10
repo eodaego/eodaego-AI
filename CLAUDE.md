@@ -10,6 +10,8 @@ Currently implemented domains: `crawling` (schedule-config CRUD driving APSchedu
 
 Project rules live in `.claude/rules/*.md` — read those for team conventions, architecture boundaries, testing policy, and delivery/PR process. This file only covers commands and architecture that require reading multiple files to piece together.
 
+**Git force 옵션 절대 금지**: `git add -f`(`.gitignore` 우회 포함), `push -f`/`--force`, `checkout -f`, `clean -f`, `branch -D`, `reset --hard` 등 모든 force성 git 명령은 사용자가 그 순간 명시적으로 요청한 경우가 아니면 어떤 예외도 없이 사용하지 않는다. `.gitignore`로 제외된 파일(`docs/`, `.report/` 등)은 제외된 상태를 그대로 존중한다.
+
 ## Commands
 
 - Install deps: `uv sync`
