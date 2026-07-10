@@ -19,8 +19,10 @@ JOB_REGISTRY: JobRegistry = {}
 
 def build_trigger(trigger_type: str, trigger_config: str) -> IntervalTrigger | CronTrigger:
     if trigger_type == "interval":
-        hours = int(trigger_config.removeprefix("hours="))
-        return IntervalTrigger(hours=hours)
+        unit, _, value = trigger_config.partition("=")
+        if unit not in ("minutes", "hours"):
+            raise ValueError(f"unsupported interval unit: {unit}")
+        return IntervalTrigger(**{unit: int(value)})
     if trigger_type == "cron":
         return CronTrigger.from_crontab(trigger_config)
     raise ValueError(f"unsupported trigger_type: {trigger_type}")
