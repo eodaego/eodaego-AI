@@ -229,8 +229,12 @@ def sync_animal_locations(db: Session) -> None:
         "numOfRows": 100,
         "type": "json",
     }
-    response = requests.get(ANIMAL_LOCATION_URL, params=params, timeout=10)
-    response.raise_for_status()
+    try:
+        response = requests.get(ANIMAL_LOCATION_URL, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        status = getattr(exc.response, "status_code", "unknown")
+        raise RuntimeError(f"동물 위치 정보 API 호출 실패 (status={status})") from None
     body = response.json().get("body", {})
     raw_items = body.get("items", {}).get("item", [])
     entries = raw_items if isinstance(raw_items, list) else [raw_items]

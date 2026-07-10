@@ -54,7 +54,11 @@ def crawl_operating_hours_job() -> None:
     session_factory = sessionmaker(bind=get_engine())
     with session_factory() as db:
         try:
-            replace_operating_hours_sections(db, crawl_operating_hours())
+            sections = crawl_operating_hours()
+            if not sections:
+                logger.warning("운영시간 크롤링 결과가 비어있어 기존 데이터를 유지합니다")
+                return
+            replace_operating_hours_sections(db, sections)
         except Exception:
             db.rollback()
             logger.warning("운영시간 크롤링 실패", exc_info=True)

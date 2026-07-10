@@ -53,8 +53,12 @@ def fetch_congestion_from_seoul_api() -> dict[str, Any]:
     settings = get_settings()
     place = quote(CONGESTION_PLACE_NAME)
     url = f"{CITYDATA_BASE_URL}/{settings.seoul_open_api_key}/json/citydata/1/5/{place}"
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        status = getattr(exc.response, "status_code", "unknown")
+        raise RuntimeError(f"서울시 혼잡도 API 호출 실패 (status={status})") from None
     data = response.json()
     live_status: dict[str, Any] = data["CITYDATA"]["LIVE_PPLTN_STTS"][0]
     return live_status
