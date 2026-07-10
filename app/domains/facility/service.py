@@ -56,6 +56,7 @@ def crawl_operating_hours_job() -> None:
         try:
             replace_operating_hours_sections(db, crawl_operating_hours())
         except Exception:
+            db.rollback()
             logger.warning("운영시간 크롤링 실패", exc_info=True)
 
 

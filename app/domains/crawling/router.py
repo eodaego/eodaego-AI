@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_internal_api_key
@@ -62,7 +62,7 @@ congestion_router = APIRouter(
 
 @congestion_router.get("", response_model=list[CongestionSnapshotResponse])
 def list_congestion(
-    limit: int = 20, db: Session = Depends(get_db)
+    limit: int = Query(default=20, ge=1, le=100), db: Session = Depends(get_db)
 ) -> list[CongestionSnapshotResponse]:
     snapshots = service.list_congestion_snapshots(db, limit=limit)
     return [CongestionSnapshotResponse.model_validate(s) for s in snapshots]
