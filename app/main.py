@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.session import get_engine
+from app.domains.crawling.router import congestion_router
 from app.domains.crawling.router import router as crawling_router
 from app.domains.prompt.router import router as prompt_router
 from app.scheduler.registry import JOB_REGISTRY, bootstrap_scheduler
@@ -33,6 +34,7 @@ app = FastAPI(title="eodaego-ai", lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(prompt_router)
 app.include_router(crawling_router)
+app.include_router(congestion_router)
 
 
 @app.get("/health")

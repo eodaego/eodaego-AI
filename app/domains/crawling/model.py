@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, String, func, true
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,18 +25,11 @@ class CongestionSnapshot(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     place_ref_key: Mapped[str] = mapped_column(String(100))
-    congestion_level: Mapped[float] = mapped_column(Float)
-    collected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-
-class OperatingHoursSnapshot(Base):
-    __tablename__ = "operating_hours_snapshot"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    place_ref_key: Mapped[str] = mapped_column(String(100))
-    raw_hours_text: Mapped[str] = mapped_column(String(500))
+    congestion_level: Mapped[str] = mapped_column(String(20))
+    congestion_message: Mapped[str] = mapped_column(String(200))
+    population_min: Mapped[int] = mapped_column(Integer)
+    population_max: Mapped[int] = mapped_column(Integer)
+    forecast: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -11,7 +11,6 @@ from app.core.config import get_settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.domains.crawling.model import (  # noqa: E402, F401
     CongestionSnapshot,
-    OperatingHoursSnapshot,
     ScheduleConfig,
 )
 from app.domains.prompt.model import PromptTemplate  # noqa: E402, F401

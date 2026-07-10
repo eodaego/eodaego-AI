@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -26,3 +26,16 @@ class ScheduleConfigResponse(BaseModel):
     trigger_config: str
     is_active: bool
     updated_at: datetime
+
+
+class CongestionSnapshotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    place_ref_key: str
+    congestion_level: str
+    congestion_message: str
+    population_min: int
+    population_max: int
+    forecast: list[dict[str, Any]]
+    collected_at: datetime

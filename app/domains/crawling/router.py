@@ -5,6 +5,7 @@ from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.crawling import service
 from app.domains.crawling.schema import (
+    CongestionSnapshotResponse,
     ScheduleConfigCreate,
     ScheduleConfigResponse,
     ScheduleConfigUpdate,
@@ -50,3 +51,18 @@ def delete_schedule(schedule_id: int, db: Session = Depends(get_db)) -> None:
         detail = "schedule config not found"
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     service.delete_schedule_config(db, schedule)
+
+
+congestion_router = APIRouter(
+    prefix="/api/v1/congestion",
+    tags=["congestion"],
+    dependencies=[Depends(verify_internal_api_key)],
+)
+
+
+@congestion_router.get("", response_model=list[CongestionSnapshotResponse])
+def list_congestion(
+    limit: int = 20, db: Session = Depends(get_db)
+) -> list[CongestionSnapshotResponse]:
+    snapshots = service.list_congestion_snapshots(db, limit=limit)
+    return [CongestionSnapshotResponse.model_validate(s) for s in snapshots]
