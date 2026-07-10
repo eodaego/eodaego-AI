@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_internal_api_key
@@ -39,7 +40,12 @@ def list_operating_hours(db: Session = Depends(get_db)) -> list[OperatingHoursSe
 def create_amusement_ride(
     data: AmusementRideCreate, db: Session = Depends(get_db)
 ) -> AmusementRideResponse:
-    ride = service.create_amusement_ride(db, data)
+    try:
+        ride = service.create_amusement_ride(db, data)
+    except IntegrityError:
+        db.rollback()
+        detail = "amusement ride name already exists"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
     return AmusementRideResponse.model_validate(ride)
 
 
