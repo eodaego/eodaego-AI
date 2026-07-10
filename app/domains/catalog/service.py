@@ -6,9 +6,10 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import requests
 from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import get_settings
 from app.db.session import get_engine
 from app.domains.catalog.model import Animal, Plant
 
@@ -217,6 +218,36 @@ def list_plants(db: Session) -> list[Plant]:
     return list(db.scalars(select(Plant)).all())
 
 
+ANIMAL_LOCATION_URL = "https://apis.data.go.kr/B553774/AnmalLocation"
+
+
+def sync_animal_locations(db: Session) -> None:
+    settings = get_settings()
+    params: dict[str, str | int] = {
+        "serviceKey": settings.data_go_kr_service_key,
+        "pageNo": 1,
+        "numOfRows": 100,
+        "type": "json",
+    }
+    response = requests.get(ANIMAL_LOCATION_URL, params=params, timeout=10)
+    response.raise_for_status()
+    body = response.json().get("body", {})
+    raw_items = body.get("items", {}).get("item", [])
+    entries = raw_items if isinstance(raw_items, list) else [raw_items]
+    for entry in entries:
+        animal_name = entry.get("kordesc")
+        location_name = entry.get("lname")
+        if not animal_name or not location_name:
+            continue
+        normalized = animal_name.replace(" ", "")
+        animal = db.scalar(
+            select(Animal).where(func.replace(Animal.name, " ", "") == normalized)
+        )
+        if animal is not None:
+            animal.location_name = location_name
+    db.commit()
+
+
 def crawl_catalog_job() -> None:
     session_factory = sessionmaker(bind=get_engine())
     with session_factory() as db:
@@ -230,3 +261,8 @@ def crawl_catalog_job() -> None:
         except Exception:
             db.rollback()
             logger.warning("식물 도감 크롤링 실패", exc_info=True)
+        try:
+            sync_animal_locations(db)
+        except Exception:
+            db.rollback()
+            logger.warning("동물 위치 정보 동기화 실패", exc_info=True)
