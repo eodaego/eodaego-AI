@@ -14,6 +14,11 @@ from app.domains.crawling.model import (  # noqa: E402, F401
     CongestionSnapshot,
     ScheduleConfig,
 )
+from app.domains.facility.model import (  # noqa: E402, F401
+    AmusementRide,
+    Facility,
+    OperatingHoursSection,
+)
 from app.domains.prompt.model import PromptTemplate  # noqa: E402, F401
 
 config = context.config
