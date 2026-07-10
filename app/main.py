@@ -13,6 +13,7 @@ from app.db.session import get_engine
 from app.domains.catalog.router import router as catalog_router
 from app.domains.crawling.router import congestion_router
 from app.domains.crawling.router import router as crawling_router
+from app.domains.facility.router import router as facility_router
 from app.domains.prompt.router import router as prompt_router
 from app.scheduler.registry import JOB_REGISTRY, bootstrap_scheduler
 
@@ -37,6 +38,7 @@ app.include_router(prompt_router)
 app.include_router(crawling_router)
 app.include_router(congestion_router)
 app.include_router(catalog_router)
+app.include_router(facility_router)
 
 
 @app.get("/health")

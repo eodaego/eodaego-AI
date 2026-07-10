@@ -7,7 +7,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.session import get_engine
-from app.domains.facility.model import Facility, OperatingHoursSection
+from app.domains.facility.model import AmusementRide, Facility, OperatingHoursSection
+from app.domains.facility.schema import AmusementRideCreate, AmusementRideUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -56,3 +57,34 @@ def crawl_operating_hours_job() -> None:
             replace_operating_hours_sections(db, crawl_operating_hours())
         except Exception:
             logger.warning("운영시간 크롤링 실패", exc_info=True)
+
+
+def create_amusement_ride(db: Session, data: AmusementRideCreate) -> AmusementRide:
+    ride = AmusementRide(**data.model_dump())
+    db.add(ride)
+    db.commit()
+    db.refresh(ride)
+    return ride
+
+
+def list_amusement_rides(db: Session) -> list[AmusementRide]:
+    return list(db.scalars(select(AmusementRide)).all())
+
+
+def get_amusement_ride(db: Session, ride_id: int) -> AmusementRide | None:
+    return db.get(AmusementRide, ride_id)
+
+
+def update_amusement_ride(
+    db: Session, ride: AmusementRide, data: AmusementRideUpdate
+) -> AmusementRide:
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(ride, field, value)
+    db.commit()
+    db.refresh(ride)
+    return ride
+
+
+def delete_amusement_ride(db: Session, ride: AmusementRide) -> None:
+    db.delete(ride)
+    db.commit()
