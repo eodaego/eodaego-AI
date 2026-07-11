@@ -41,9 +41,9 @@ _VILAGE_FCST_RELEASE_HOURS = (2, 5, 8, 11, 14, 17, 20, 23)
 
 
 def _latest_ultra_srt_ncst_base(now: datetime) -> tuple[str, str]:
-    """초단기실황은 매시 40분에 발표되고 발표 후 몇 분 뒤 제공된다.
-    45분 버퍼를 둬 아직 제공되지 않았을 수 있는 이번 시각 대신 이전 시각 값을 요청한다."""
-    base_dt = now if now.minute >= 45 else now - timedelta(hours=1)
+    """초단기실황은 매시 40분에 발표되고 약 10분 후(매시 50분경) 제공된다.
+    50분 버퍼를 둬 아직 제공되지 않았을 수 있는 이번 시각 대신 이전 시각 값을 요청한다."""
+    base_dt = now if now.minute >= 50 else now - timedelta(hours=1)
     return base_dt.strftime("%Y%m%d"), base_dt.strftime("%H00")
 
 
