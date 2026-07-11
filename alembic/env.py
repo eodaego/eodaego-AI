@@ -20,6 +20,7 @@ from app.domains.facility.model import (  # noqa: E402, F401
     OperatingHoursSection,
 )
 from app.domains.prompt.model import PromptTemplate  # noqa: E402, F401
+from app.domains.weather.model import WeatherSnapshot  # noqa: E402, F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

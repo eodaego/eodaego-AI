@@ -15,6 +15,7 @@ from app.domains.crawling.router import congestion_router
 from app.domains.crawling.router import router as crawling_router
 from app.domains.facility.router import router as facility_router
 from app.domains.prompt.router import router as prompt_router
+from app.domains.weather.router import router as weather_router
 from app.scheduler.registry import JOB_REGISTRY, bootstrap_scheduler
 
 configure_logging()
@@ -39,6 +40,7 @@ app.include_router(crawling_router)
 app.include_router(congestion_router)
 app.include_router(catalog_router)
 app.include_router(facility_router)
+app.include_router(weather_router)
 
 
 @app.get("/health")
