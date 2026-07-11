@@ -4,8 +4,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import requests
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.db.session import get_engine
+from app.domains.weather.model import WeatherSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -142,3 +146,32 @@ def fetch_weather_from_kma_api() -> dict[str, Any]:
     # 첫 항목이 가장 가까운 미래 시각). 예보가 비어 있으면 None으로 둔다.
     sky_condition = hourly_forecast[0]["sky_condition"] if hourly_forecast else None
     return {**observation, "sky_condition": sky_condition, "hourly_forecast": hourly_forecast}
+
+
+def save_weather_snapshot(db: Session, data: dict[str, Any]) -> WeatherSnapshot:
+    snapshot = WeatherSnapshot(place_ref_key=WEATHER_PLACE_NAME, **data)
+    db.add(snapshot)
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def get_latest_weather_snapshot(db: Session) -> WeatherSnapshot | None:
+    stmt = select(WeatherSnapshot).order_by(WeatherSnapshot.collected_at.desc()).limit(1)
+    return db.scalar(stmt)
+
+
+def list_weather_snapshots(db: Session, limit: int = 20) -> list[WeatherSnapshot]:
+    stmt = select(WeatherSnapshot).order_by(WeatherSnapshot.collected_at.desc()).limit(limit)
+    return list(db.scalars(stmt).all())
+
+
+def crawl_weather_job() -> None:
+    session_factory = sessionmaker(bind=get_engine())
+    with session_factory() as db:
+        try:
+            data = fetch_weather_from_kma_api()
+            save_weather_snapshot(db, data)
+        except Exception:
+            db.rollback()
+            logger.warning("날씨 수집 실패", exc_info=True)
