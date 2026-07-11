@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+from app.core.kst import KstDatetime
 
 
 class WeatherSnapshotResponse(BaseModel):
@@ -15,5 +16,5 @@ class WeatherSnapshotResponse(BaseModel):
     wind_speed: float
     sky_condition: str | None
     hourly_forecast: list[dict[str, Any]]
-    observed_at: datetime
-    collected_at: datetime
+    observed_at: KstDatetime
+    collected_at: KstDatetime

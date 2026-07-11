@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict
+
+from app.core.kst import KstDatetime
 
 
 class AnimalResponse(BaseModel):
@@ -19,7 +19,7 @@ class AnimalResponse(BaseModel):
     thumbnail_url: str | None
     location_name: str | None
     source_url: str
-    updated_at: datetime
+    updated_at: KstDatetime
 
 
 class PlantResponse(BaseModel):
@@ -33,4 +33,4 @@ class PlantResponse(BaseModel):
     registered_date: str | None
     thumbnail_url: str | None
     source_url: str
-    updated_at: datetime
+    updated_at: KstDatetime

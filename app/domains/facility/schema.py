@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.core.kst import KstDatetime
 
 
 class FacilityResponse(BaseModel):
@@ -15,7 +15,7 @@ class FacilityResponse(BaseModel):
     latitude: float | None
     longitude: float | None
     facility_type: str | None
-    updated_at: datetime
+    updated_at: KstDatetime
 
 
 class OperatingHoursSectionResponse(BaseModel):
@@ -25,7 +25,7 @@ class OperatingHoursSectionResponse(BaseModel):
     section_title: str
     content_html: str
     display_order: int
-    collected_at: datetime
+    collected_at: KstDatetime
 
 
 class AmusementRideCreate(BaseModel):
@@ -66,4 +66,4 @@ class AmusementRideResponse(BaseModel):
     description: str | None
     location: str | None
     is_active: bool
-    updated_at: datetime
+    updated_at: KstDatetime

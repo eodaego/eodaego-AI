@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
+
+from app.core.kst import KstDatetime
 
 
 class ScheduleConfigCreate(BaseModel):
@@ -25,7 +26,7 @@ class ScheduleConfigResponse(BaseModel):
     trigger_type: str
     trigger_config: str
     is_active: bool
-    updated_at: datetime
+    updated_at: KstDatetime
 
 
 class CongestionSnapshotResponse(BaseModel):
@@ -38,4 +39,4 @@ class CongestionSnapshotResponse(BaseModel):
     population_min: int
     population_max: int
     forecast: list[dict[str, Any]]
-    collected_at: datetime
+    collected_at: KstDatetime

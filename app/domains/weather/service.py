@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import requests
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.kst import KST, format_kst
 from app.db.session import get_engine
 from app.domains.weather.model import WeatherSnapshot
 
@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 KMA_BASE_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0"
 WEATHER_PLACE_NAME = "어린이대공원"
-KST = ZoneInfo("Asia/Seoul")
 
 # 서울어린이대공원(광진구 능동로 216, 대략 위도 37.548~37.552 / 경도 127.07 범위) 대표 좌표 후보
 # 여러 개를 기상청 공식 위경도<->격자 변환(람베르트 정형 원추 투영법) 공식에 넣었을 때 모두 같은
@@ -126,9 +125,9 @@ def fetch_hourly_forecast() -> list[dict[str, Any]]:
             continue
         forecast.append(
             {
-                "datetime": datetime.strptime(f"{fcst_date}{fcst_time}", "%Y%m%d%H%M")
-                .replace(tzinfo=KST)
-                .isoformat(),
+                "datetime": format_kst(
+                    datetime.strptime(f"{fcst_date}{fcst_time}", "%Y%m%d%H%M").replace(tzinfo=KST)
+                ),
                 "temperature": float(values["TMP"]),
                 "precipitation_probability": int(values.get("POP", 0)),
                 "precipitation_type": PTY_LABELS.get(pty, pty) if pty else "없음",

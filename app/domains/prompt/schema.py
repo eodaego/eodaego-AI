@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict
+
+from app.core.kst import KstDatetime
 
 
 class PromptTemplateCreate(BaseModel):
@@ -22,4 +22,4 @@ class PromptTemplateResponse(BaseModel):
     name: str
     template_text: str
     is_active: bool
-    updated_at: datetime
+    updated_at: KstDatetime
