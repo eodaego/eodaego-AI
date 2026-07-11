@@ -10,7 +10,7 @@
 
 - 각 주요 모듈의 책임: `app/domains/{crawling,prompt}`는 각자 자신의 router/service/schema/model만 소유한다. `app/core`는 여러 도메인이 공유하는 횡단 관심사(설정/인증/로깅/에러)만 담고 도메인 로직을 갖지 않는다. `app/db`는 SQLAlchemy `Base`와 엔진/세션 팩토리만 제공한다. `app/scheduler`는 도메인의 실제 job 함수를 `JOB_REGISTRY`로 참조만 하고 크롤링 로직 자체는 갖지 않는다(각 도메인이 소유).
 - 모듈 간 허용 의존 방향: `domains → core, db` (단방향). `core`/`db`는 `domains`를 알지 못한다. `scheduler`는 `crawling` 도메인의 `ScheduleConfig` 모델만 참조하고, 실제 job 함수는 각 도메인이 `JOB_REGISTRY`에 등록하는 방식으로 역할을 분리한다(현재 `JOB_REGISTRY`는 비어있음 — `congestion_job`/`catalog_job` 미구현).
-- 금지 의존 관계: `core`/`db` → `domains` 의존 금지. 한 도메인이 다른 도메인의 model/service를 직접 import하지 않는다(공용 로직이 필요하면 `core`로 승격).
+- 금지 의존 관계: `core`/`db` → `domains` 의존 금지. 도메인 간 model/service 직접 import는 **단방향**(A가 B를 import하되 B는 A를 import하지 않는 방향)이면 허용한다(2026-07-11 결정: 도메인 간 의존을 100% 차단하는 것이 비현실적이라 판단 — 예: 향후 `recommendation` 도메인이 `weather`/`crawling`(혼잡도) 도메인의 조회 함수를 직접 import). **순환 의존은 금지** — B가 다시 A를 import하는 관계가 생기면 공용 로직을 `core`로 승격해 순환을 끊는다.
 
 ## Data flow
 
