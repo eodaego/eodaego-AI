@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="eodaego-ai",
-    description=(  # noqa: E501
+    description=(
         "서울어린이대공원 방문객 대상 AI 코스 추천·도감 수집 서비스 **어대GO**의 내부 전용 AI 백엔드입니다.\n\n"  # noqa: E501
         "- `eodaego-server`(BE, Spring Boot)만 내부 브리지 네트워크(`eodaego-internal`)를 통해 "
         "컨테이너 이름으로 호출하며, FE(Flutter)나 관리자 브라우저에서 직접 호출되지 않습니다.\n"

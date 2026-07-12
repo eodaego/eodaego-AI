@@ -28,7 +28,7 @@ def error_response(code: str, message: str, description: str) -> dict[str, Any]:
     }
 
 
-# FastAPI의 `responses` 파라미터 타입(`dict[int | str, dict[str, Any]] | None`)과 정확히 맞춰야  # noqa: E501
+# FastAPI의 `responses` 파라미터 타입(`dict[int | str, dict[str, Any]] | None`)과 정확히 맞춰야
 # mypy --strict가 통과한다. dict는 키 타입에 대해 invariant이므로 `dict[int, ...]`로 선언하면
 # `responses=`에 그대로 전달하거나 `{**이 상수, ...}`로 언팩할 때 [arg-type]/[dict-item] 에러가 난다.  # noqa: E501
 _UNAUTHORIZED: dict[int | str, dict[str, Any]] = {
