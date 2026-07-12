@@ -1,8 +1,25 @@
 from http import HTTPStatus
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+
+class ErrorDetail(BaseModel):
+    """공통 에러 응답의 `error` 필드 스키마."""
+
+    code: str
+    message: str
+
+
+class ErrorEnvelope(BaseModel):
+    """모든 에러 응답이 따르는 공통 envelope. Swagger `responses=`에서 참조용으로만 쓰인다."""
+
+    success: Literal[False] = False
+    data: None = None
+    error: ErrorDetail
 
 
 def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
