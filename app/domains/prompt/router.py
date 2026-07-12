@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.openapi import NO_BODY_ERRORS, WITH_BODY_ERRORS, error_response
+from app.core.openapi import COMMON_ERRORS, error_response
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.prompt import service
@@ -27,7 +27,7 @@ _NOT_FOUND_RESPONSE = error_response(
     response_model=PromptTemplateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="프롬프트 템플릿 생성",
-    responses=WITH_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def create_prompt(
     data: PromptTemplateCreate, db: Session = Depends(get_db)
@@ -46,7 +46,7 @@ def create_prompt(
     "",
     response_model=list[PromptTemplateResponse],
     summary="프롬프트 템플릿 전체 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_prompts(db: Session = Depends(get_db)) -> list[PromptTemplateResponse]:
     """정렬 조건 없이 `prompt_template` 테이블의 모든 행을 반환한다."""
@@ -58,7 +58,7 @@ def list_prompts(db: Session = Depends(get_db)) -> list[PromptTemplateResponse]:
     "/{prompt_id}",
     response_model=PromptTemplateResponse,
     summary="프롬프트 템플릿 부분 수정",
-    responses={**WITH_BODY_ERRORS, 404: _NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERRORS, 404: _NOT_FOUND_RESPONSE},
 )
 def update_prompt(
     prompt_id: int, data: PromptTemplateUpdate, db: Session = Depends(get_db)
@@ -80,7 +80,7 @@ def update_prompt(
     "/{prompt_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="프롬프트 템플릿 삭제",
-    responses={**WITH_BODY_ERRORS, 404: _NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERRORS, 404: _NOT_FOUND_RESPONSE},
 )
 def delete_prompt(prompt_id: int, db: Session = Depends(get_db)) -> None:
     """대상이 없으면 404. 활성 템플릿(is_active=true)을 삭제해도 다른 템플릿이 자동으로

@@ -8,8 +8,8 @@ def verify_internal_api_key(
         ...,
         description=(
             "BE(eodaego-server)가 내부망 인증에 사용하는 고정 API 키. "
-            "AI 서버의 `.env.{APP_ENV}`에 설정된 INTERNAL_API_KEY와 값이 정확히 일치해야 하며, "
-            "일치하지 않거나 헤더 자체가 없으면 401을 반환한다."
+            "AI 서버의 `.env.{APP_ENV}`에 설정된 INTERNAL_API_KEY와 값이 정확히 일치해야 한다. "
+            "헤더 자체가 없으면 422(필수 파라미터 누락)가, 값이 일치하지 않으면 401이 반환된다."
         ),
     ),
 ) -> None:

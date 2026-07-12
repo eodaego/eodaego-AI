@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.openapi import NO_BODY_ERRORS, WITH_BODY_ERRORS, error_response
+from app.core.openapi import COMMON_ERRORS, error_response
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.facility import service
@@ -29,7 +29,7 @@ _RIDE_NOT_FOUND_RESPONSE = error_response(
     "",
     response_model=list[FacilityResponse],
     summary="시설 전체 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_facilities(db: Session = Depends(get_db)) -> list[FacilityResponse]:
     """공식 데이터 기반 시설 정보를 반환한다. **주의:** 현재 코드베이스에는 `facility` 테이블을
@@ -43,7 +43,7 @@ def list_facilities(db: Session = Depends(get_db)) -> list[FacilityResponse]:
     "/operating-hours",
     response_model=list[OperatingHoursSectionResponse],
     summary="운영시간 안내 섹션 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_operating_hours(db: Session = Depends(get_db)) -> list[OperatingHoursSectionResponse]:
     """서울시설공단 공식 페이지의 운영시간 안내를 크롤링해 저장한 데이터를 `display_order`
@@ -60,7 +60,7 @@ def list_operating_hours(db: Session = Depends(get_db)) -> list[OperatingHoursSe
     status_code=status.HTTP_201_CREATED,
     summary="놀이기구 생성 (관리자)",
     responses={
-        **WITH_BODY_ERRORS,
+        **COMMON_ERRORS,
         409: error_response(
             "CONFLICT",
             "amusement ride name already exists",
@@ -86,7 +86,7 @@ def create_amusement_ride(
     "/amusement-rides",
     response_model=list[AmusementRideResponse],
     summary="놀이기구 전체 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_amusement_rides(db: Session = Depends(get_db)) -> list[AmusementRideResponse]:
     """정렬 조건 없이 전체 놀이기구를 반환한다(운영 중지된 것도 포함)."""
@@ -98,7 +98,7 @@ def list_amusement_rides(db: Session = Depends(get_db)) -> list[AmusementRideRes
     "/amusement-rides/{ride_id}",
     response_model=AmusementRideResponse,
     summary="놀이기구 부분 수정",
-    responses={**WITH_BODY_ERRORS, 404: _RIDE_NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERRORS, 404: _RIDE_NOT_FOUND_RESPONSE},
 )
 def update_amusement_ride(
     ride_id: int, data: AmusementRideUpdate, db: Session = Depends(get_db)
@@ -118,7 +118,7 @@ def update_amusement_ride(
     "/amusement-rides/{ride_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="놀이기구 삭제",
-    responses={**WITH_BODY_ERRORS, 404: _RIDE_NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERRORS, 404: _RIDE_NOT_FOUND_RESPONSE},
 )
 def delete_amusement_ride(ride_id: int, db: Session = Depends(get_db)) -> None:
     """대상이 없으면 404."""

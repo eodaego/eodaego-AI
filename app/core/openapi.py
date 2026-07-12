@@ -35,7 +35,8 @@ _UNAUTHORIZED: dict[int | str, dict[str, Any]] = {
     401: error_response(
         "UNAUTHORIZED",
         "invalid internal api key",
-        "X-Internal-Api-Key 헤더가 없거나 값이 설정된 INTERNAL_API_KEY와 일치하지 않음",
+        "X-Internal-Api-Key 헤더 값이 설정된 INTERNAL_API_KEY와 일치하지 않음 "
+        "(헤더 자체가 없으면 401이 아니라 422가 발생함)",
     )
 }
 
@@ -44,8 +45,9 @@ _VALIDATION_ERROR: dict[int | str, dict[str, Any]] = {
         "VALIDATION_ERROR",
         "[{'type': 'missing', 'loc': ('body', 'name'), 'msg': 'Field required', "
         "'input': {}, 'url': 'https://errors.pydantic.dev/2.9/v/missing'}]",
-        "요청 바디/쿼리/경로 파라미터가 스키마 검증에 실패함 (Pydantic의 에러 목록이 "
-        "문자열로 직렬화되어 message에 담김 — 실제 항목 수·필드는 검증 실패 내용에 따라 다름)",
+        "요청 바디/쿼리/경로 파라미터 또는 필수 헤더(X-Internal-Api-Key)가 스키마 검증에 "
+        "실패함 (Pydantic의 에러 목록이 문자열로 직렬화되어 message에 담김 — 실제 항목 "
+        "수·필드는 검증 실패 내용에 따라 다름)",
     )
 }
 
@@ -58,10 +60,13 @@ _INTERNAL_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
     )
 }
 
-NO_BODY_ERRORS: dict[int | str, dict[str, Any]] = {**_UNAUTHORIZED, **_INTERNAL_SERVER_ERROR}
-"""쿼리·경로 파라미터에 검증 제약이 없어 422가 발생할 수 없는 엔드포인트용 공통 에러 응답."""
+COMMON_ERRORS: dict[int | str, dict[str, Any]] = {
+    **_UNAUTHORIZED,
+    **_VALIDATION_ERROR,
+    **_INTERNAL_SERVER_ERROR,
+}
+"""모든 인증 엔드포인트에 공통으로 적용되는 에러 응답(401/422/500).
 
-WITH_BODY_ERRORS: dict[int | str, dict[str, Any]] = {**NO_BODY_ERRORS, **_VALIDATION_ERROR}
-"""요청 바디, 쿼리 파라미터, 또는 경로 파라미터(예: path의 `{id}`가 int로 변환되지 않는 경우)로
-422가 발생할 수 있는 엔드포인트용 공통 에러 응답. 이름과 달리 바디가 없는 DELETE 엔드포인트도
-경로 파라미터 타입 검증 때문에 이 상수를 쓴다."""
+`X-Internal-Api-Key`가 모든 엔드포인트의 필수 헤더 파라미터이므로, 요청 바디·쿼리·경로
+파라미터가 전혀 없는 엔드포인트도 헤더 누락 시 422가 발생할 수 있다 — 따라서 "바디가 있는
+엔드포인트만 422가 가능하다"는 구분은 성립하지 않으며, 모든 엔드포인트에 422를 포함한다."""

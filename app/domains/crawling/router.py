@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.openapi import NO_BODY_ERRORS, WITH_BODY_ERRORS, error_response
+from app.core.openapi import COMMON_ERRORS, error_response
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.crawling import service
@@ -40,7 +40,7 @@ _SCHEDULE_CREATE_DESC = """크롤링 작업의 실행 주기를 DB에 등록한�
     status_code=status.HTTP_201_CREATED,
     summary="크롤링 스케줄 설정 생성",
     description=_SCHEDULE_CREATE_DESC,
-    responses=WITH_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def create_schedule(
     data: ScheduleConfigCreate, db: Session = Depends(get_db)
@@ -53,7 +53,7 @@ def create_schedule(
     "",
     response_model=list[ScheduleConfigResponse],
     summary="크롤링 스케줄 설정 전체 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_schedules(db: Session = Depends(get_db)) -> list[ScheduleConfigResponse]:
     """등록된 모든 스케줄 설정을 반환한다(`is_active=false`인 것도 포함). 실제로 현재
@@ -67,7 +67,7 @@ def list_schedules(db: Session = Depends(get_db)) -> list[ScheduleConfigResponse
     "/{schedule_id}",
     response_model=ScheduleConfigResponse,
     summary="크롤링 스케줄 설정 부분 수정",
-    responses={**WITH_BODY_ERRORS, 404: _SCHEDULE_NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERRORS, 404: _SCHEDULE_NOT_FOUND_RESPONSE},
 )
 def update_schedule(
     schedule_id: int, data: ScheduleConfigUpdate, db: Session = Depends(get_db)
@@ -87,7 +87,7 @@ def update_schedule(
     "/{schedule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="크롤링 스케줄 설정 삭제",
-    responses={**WITH_BODY_ERRORS, 404: _SCHEDULE_NOT_FOUND_RESPONSE},
+    responses={**COMMON_ERRORS, 404: _SCHEDULE_NOT_FOUND_RESPONSE},
 )
 def delete_schedule(schedule_id: int, db: Session = Depends(get_db)) -> None:
     """대상이 없으면 404. 삭제해도 이미 실행 중인 스케줄러의 job은 AI 서버가 재시작되기
@@ -111,7 +111,7 @@ congestion_router = APIRouter(
     "",
     response_model=list[CongestionSnapshotResponse],
     summary="어린이대공원 혼잡도 스냅샷 목록 조회",
-    responses=WITH_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_congestion(
     limit: int = Query(default=20, ge=1, le=100, description="반환할 최대 건수 (1~100, 기본값 20)"),

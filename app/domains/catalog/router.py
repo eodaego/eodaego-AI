@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.openapi import NO_BODY_ERRORS
+from app.core.openapi import COMMON_ERRORS
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.catalog import service
@@ -18,7 +18,7 @@ router = APIRouter(
     "/animals",
     response_model=list[AnimalResponse],
     summary="동물 도감 전체 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_animals(db: Session = Depends(get_db)) -> list[AnimalResponse]:
     """서울시설공단 어린이대공원 동물 도감 게시판을 크롤링해 저장한 데이터를 반환한다
@@ -32,7 +32,7 @@ def list_animals(db: Session = Depends(get_db)) -> list[AnimalResponse]:
     "/plants",
     response_model=list[PlantResponse],
     summary="식물 도감 전체 목록 조회",
-    responses=NO_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_plants(db: Session = Depends(get_db)) -> list[PlantResponse]:
     """서울시설공단 어린이대공원 식물 도감 게시판을 크롤링해 저장한 데이터를 반환한다

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.openapi import NO_BODY_ERRORS, WITH_BODY_ERRORS, error_response
+from app.core.openapi import COMMON_ERRORS, error_response
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.weather import service
@@ -19,7 +19,7 @@ router = APIRouter(
     response_model=WeatherSnapshotResponse,
     summary="최신 날씨 스냅샷 조회",
     responses={
-        **NO_BODY_ERRORS,
+        **COMMON_ERRORS,
         404: error_response(
             "NOT_FOUND",
             "weather snapshot not found",
@@ -40,7 +40,7 @@ def get_current_weather(db: Session = Depends(get_db)) -> WeatherSnapshotRespons
     "",
     response_model=list[WeatherSnapshotResponse],
     summary="날씨 스냅샷 목록 조회",
-    responses=WITH_BODY_ERRORS,
+    responses=COMMON_ERRORS,
 )
 def list_weather(
     limit: int = Query(default=20, ge=1, le=100, description="반환할 최대 건수 (1~100, 기본값 20)"),

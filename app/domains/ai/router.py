@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.openapi import WITH_BODY_ERRORS, error_response
+from app.core.openapi import COMMON_ERRORS, error_response
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.ai import service
@@ -20,7 +20,7 @@ router = APIRouter(
     summary="AI 챗 응답 생성 (관리자 제어형)",
     response_description="SUH-AIder가 생성한 응답 텍스트",
     responses={
-        **WITH_BODY_ERRORS,
+        **COMMON_ERRORS,
         503: error_response(
             "SERVICE_UNAVAILABLE",
             "활성화된 프롬프트가 없습니다",
