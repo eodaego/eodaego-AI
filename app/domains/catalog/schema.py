@@ -8,9 +8,7 @@ _MSG_SEQ_DESC = (
 )
 _REGISTERED_DATE_DESC = "원본 게시판 등록일 문자열 그대로 (파싱된 date 타입이 아닌 원본 텍스트)"
 _THUMBNAIL_URL_DESC = "썸네일 이미지 URL. 원본에 이미지가 없으면 null."
-_SOURCE_URL_DESC = (
-    "원본 상세 페이지 URL (값 자체는 목록 페이지 크롤링 시 msg_seq로 조합해 생성됨)"
-)
+_SOURCE_URL_DESC = "원본 상세 페이지 URL (값 자체는 목록 페이지 크롤링 시 msg_seq로 조합해 생성됨)"
 _UPDATED_AT_DESC = "마지막 크롤링 upsert 시각 (KST)"
 _CLASSIFICATION_DESC = "원본 목록 페이지 항목의 '분류' 라벨 값. 없으면 null."
 

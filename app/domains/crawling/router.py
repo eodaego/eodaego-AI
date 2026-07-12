@@ -114,9 +114,7 @@ congestion_router = APIRouter(
     responses=WITH_BODY_ERRORS,
 )
 def list_congestion(
-    limit: int = Query(
-        default=20, ge=1, le=100, description="반환할 최대 건수 (1~100, 기본값 20)"
-    ),
+    limit: int = Query(default=20, ge=1, le=100, description="반환할 최대 건수 (1~100, 기본값 20)"),
     db: Session = Depends(get_db),
 ) -> list[CongestionSnapshotResponse]:
     """서울시 실시간 도시데이터 API에서 수집한 혼잡도 스냅샷을 최신순(`collected_at` 내림차순)으로

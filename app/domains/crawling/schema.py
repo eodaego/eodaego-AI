@@ -34,9 +34,7 @@ class ScheduleConfigCreate(BaseModel):
 class ScheduleConfigUpdate(BaseModel):
     trigger_type: Literal["interval", "cron"] | None = Field(
         default=None,
-        description=(
-            f"{_TRIGGER_TYPE_DESC} 생략 시 기존 값 유지. job_id는 수정할 수 없다."
-        ),
+        description=(f"{_TRIGGER_TYPE_DESC} 생략 시 기존 값 유지. job_id는 수정할 수 없다."),
     )
     trigger_config: str | None = Field(
         default=None,
