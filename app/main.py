@@ -34,7 +34,51 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="eodaego-ai", lifespan=lifespan)
+app = FastAPI(
+    title="eodaego-ai",
+    description=(  # noqa: E501
+        "서울어린이대공원 방문객 대상 AI 코스 추천·도감 수집 서비스 **어대GO**의 내부 전용 AI 백엔드입니다.\n\n"  # noqa: E501
+        "- `eodaego-server`(BE, Spring Boot)만 내부 브리지 네트워크(`eodaego-internal`)를 통해 "
+        "컨테이너 이름으로 호출하며, FE(Flutter)나 관리자 브라우저에서 직접 호출되지 않습니다.\n"
+        "- `/health`를 제외한 모든 엔드포인트는 `X-Internal-Api-Key` 헤더 인증이 필요합니다.\n"
+        "- 성공 응답은 각 엔드포인트의 응답 스키마를 그대로 반환합니다(별도 envelope 없음). "
+        '에러 응답만 `{"success": false, "data": null, "error": {"code": ..., "message": ...}}` '
+        "형태의 공통 envelope으로 통일됩니다(전역 예외 핸들러)."
+    ),
+    version="0.1.0",
+    openapi_tags=[
+        {
+            "name": "ai",
+            "description": "SUH-AIder(개인 LLM 서버) 연동 기반 관리자 제어형 AI 챗 응답 생성",
+        },
+        {
+            "name": "prompts",
+            "description": "AI 챗 응답 생성에 사용되는 프롬프트 템플릿 CRUD (BE 관리자 SSR 페이지가 호출)",  # noqa: E501
+        },
+        {
+            "name": "crawling",
+            "description": "크롤링 작업 실행 스케줄 설정 CRUD (DB에는 즉시 반영되지만, "
+            "실제 스케줄러 등록은 AI 서버 재시작 시점에만 이루어짐)",
+        },
+        {
+            "name": "congestion",
+            "description": "서울시 실시간 도시데이터 기반 어린이대공원 혼잡도 스냅샷 조회 (조회 전용)",  # noqa: E501
+        },
+        {
+            "name": "catalog",
+            "description": "동식물 도감 데이터 조회 (조회 전용, 수집은 crawl_catalog 스케줄 job이 담당)",  # noqa: E501
+        },
+        {
+            "name": "facility",
+            "description": "시설·운영시간 정보 조회 및 놀이기구 관리자 CRUD",
+        },
+        {
+            "name": "weather",
+            "description": "기상청 API 기반 어린이대공원 날씨 스냅샷 조회 (조회 전용)",
+        },
+    ],
+    lifespan=lifespan,
+)
 register_exception_handlers(app)
 app.include_router(ai_router)
 app.include_router(prompt_router)
