@@ -5,12 +5,14 @@ from app.core.kst import KstDatetime
 
 class PromptTemplateCreate(BaseModel):
     name: str
+    model: str
     template_text: str
     is_active: bool = True
 
 
 class PromptTemplateUpdate(BaseModel):
     name: str | None = None
+    model: str | None = None
     template_text: str | None = None
     is_active: bool | None = None
 
@@ -20,6 +22,7 @@ class PromptTemplateResponse(BaseModel):
 
     id: int
     name: str
+    model: str
     template_text: str
     is_active: bool
     updated_at: KstDatetime
