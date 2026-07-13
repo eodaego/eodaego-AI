@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.job_lock import JobAlreadyRunningError
 from app.core.openapi import COMMON_ERRORS, error_response
+from app.core.schema import CrawlResult
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.weather import service
@@ -49,3 +51,27 @@ def list_weather(
     """수집된 날씨 스냅샷을 최신순(`collected_at` 내림차순)으로 최대 `limit`건 반환한다."""
     snapshots = service.list_weather_snapshots(db, limit=limit)
     return [WeatherSnapshotResponse.model_validate(s) for s in snapshots]
+
+
+_WEATHER_CRAWL_ALREADY_RUNNING_RESPONSE = error_response(
+    "CONFLICT",
+    "weather crawl already running",
+    "crawl_weather job이 이미 실행 중(스케줄된 실행 포함)",
+)
+
+
+@router.post(
+    "/crawl",
+    response_model=CrawlResult,
+    summary="날씨 데이터 즉시 수집",
+    responses={**COMMON_ERRORS, 409: _WEATHER_CRAWL_ALREADY_RUNNING_RESPONSE},
+)
+def trigger_weather_crawl() -> CrawlResult:
+    """스케줄과 무관하게 날씨 수집을 즉시 실행하고 완료될 때까지 대기한 뒤 결과를 반환한다.
+    이미 같은 수집(스케줄된 실행 포함)이 진행 중이면 409를 반환한다.
+    """
+    try:
+        return service.crawl_weather_job()
+    except JobAlreadyRunningError:
+        detail = "weather crawl already running"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None

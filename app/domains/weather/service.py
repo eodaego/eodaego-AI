@@ -7,7 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.job_lock import JobRunGuard
 from app.core.kst import KST, format_kst
+from app.core.schema import CrawlResult
 from app.db.session import get_engine
 from app.domains.weather.model import WeatherSnapshot
 
@@ -165,12 +167,15 @@ def list_weather_snapshots(db: Session, limit: int = 20) -> list[WeatherSnapshot
     return list(db.scalars(stmt).all())
 
 
-def crawl_weather_job() -> None:
-    session_factory = sessionmaker(bind=get_engine())
-    with session_factory() as db:
-        try:
-            data = fetch_weather_from_kma_api()
-            save_weather_snapshot(db, data)
-        except Exception:
-            db.rollback()
-            logger.warning("날씨 수집 실패", exc_info=True)
+def crawl_weather_job() -> CrawlResult:
+    with JobRunGuard("crawl_weather"):
+        session_factory = sessionmaker(bind=get_engine())
+        with session_factory() as db:
+            try:
+                data = fetch_weather_from_kma_api()
+                save_weather_snapshot(db, data)
+            except Exception:
+                db.rollback()
+                logger.warning("날씨 수집 실패", exc_info=True)
+                return CrawlResult(success=False, collected_count=0, message="날씨 수집 실패")
+        return CrawlResult(success=True, collected_count=1)
