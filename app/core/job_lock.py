@@ -17,7 +17,7 @@ def _get_lock(job_id: str) -> threading.Lock:
         return _job_locks[job_id]
 
 
-class job_run_guard:
+class JobRunGuard:
     """job_id별 동시 실행을 막는 컨텍스트 매니저.
 
     스케줄러(주기 실행)와 수동 트리거 API(직접 호출)가 동일한 job 함수를 서로 다른 경로로
