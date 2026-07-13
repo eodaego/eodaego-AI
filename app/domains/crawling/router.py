@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.job_lock import JobAlreadyRunningError
 from app.core.openapi import COMMON_ERRORS, error_response
+from app.core.schema import CrawlResult
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.crawling import service
@@ -123,3 +125,28 @@ def list_congestion(
     """
     snapshots = service.list_congestion_snapshots(db, limit=limit)
     return [CongestionSnapshotResponse.model_validate(s) for s in snapshots]
+
+
+_CONGESTION_CRAWL_ALREADY_RUNNING_RESPONSE = error_response(
+    "CONFLICT",
+    "congestion crawl already running",
+    "crawl_congestion job이 이미 실행 중(스케줄된 실행 포함)",
+)
+
+
+@congestion_router.post(
+    "/crawl",
+    response_model=CrawlResult,
+    summary="혼잡도 데이터 즉시 수집",
+    responses={**COMMON_ERRORS, 409: _CONGESTION_CRAWL_ALREADY_RUNNING_RESPONSE},
+)
+def trigger_congestion_crawl() -> CrawlResult:
+    """스케줄과 무관하게 혼잡도 수집을 즉시 실행하고 완료될 때까지 대기한 뒤 결과를 반환한다.
+    이미 같은 수집(스케줄된 실행 포함)이 진행 중이면 409를 반환한다. 수집 자체가 외부 API
+    오류로 실패해도 HTTP 상태는 200이며 `success: false`로 표현한다.
+    """
+    try:
+        return service.crawl_congestion_job()
+    except JobAlreadyRunningError:
+        detail = "congestion crawl already running"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None

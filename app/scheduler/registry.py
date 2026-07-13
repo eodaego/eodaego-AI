@@ -7,6 +7,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.schema import CrawlResult
 from app.domains.catalog.service import crawl_catalog_job
 from app.domains.crawling.model import ScheduleConfig
 from app.domains.crawling.service import crawl_congestion_job
@@ -15,7 +16,7 @@ from app.domains.weather.service import crawl_weather_job
 
 logger = logging.getLogger(__name__)
 
-JobRegistry = dict[str, Callable[[], None]]
+JobRegistry = dict[str, Callable[[], CrawlResult | None]]
 
 JOB_REGISTRY: JobRegistry = {
     "crawl_congestion": crawl_congestion_job,
