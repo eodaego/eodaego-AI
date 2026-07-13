@@ -10,8 +10,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.job_lock import JobRunGuard
+from app.core.schema import CrawlResult
 from app.db.session import get_engine
 from app.domains.catalog.model import Animal, Plant
+from app.domains.catalog.schema import CatalogCrawlResult
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +191,7 @@ def crawl_all_plants() -> list[dict[str, Any]]:
     return all_items
 
 
-def upsert_animals(db: Session, items: list[dict[str, Any]]) -> None:
+def upsert_animals(db: Session, items: list[dict[str, Any]]) -> int:
     for item in items:
         existing = db.scalar(select(Animal).where(Animal.msg_seq == item["msg_seq"]))
         if existing is None:
@@ -197,9 +200,10 @@ def upsert_animals(db: Session, items: list[dict[str, Any]]) -> None:
             for field, value in item.items():
                 setattr(existing, field, value)
     db.commit()
+    return len(items)
 
 
-def upsert_plants(db: Session, items: list[dict[str, Any]]) -> None:
+def upsert_plants(db: Session, items: list[dict[str, Any]]) -> int:
     for item in items:
         existing = db.scalar(select(Plant).where(Plant.msg_seq == item["msg_seq"]))
         if existing is None:
@@ -208,6 +212,7 @@ def upsert_plants(db: Session, items: list[dict[str, Any]]) -> None:
             for field, value in item.items():
                 setattr(existing, field, value)
     db.commit()
+    return len(items)
 
 
 def list_animals(db: Session) -> list[Animal]:
@@ -221,7 +226,7 @@ def list_plants(db: Session) -> list[Plant]:
 ANIMAL_LOCATION_URL = "https://apis.data.go.kr/B553774/AnmalLocation"
 
 
-def sync_animal_locations(db: Session) -> None:
+def sync_animal_locations(db: Session) -> int:
     settings = get_settings()
     params: dict[str, str | int] = {
         "serviceKey": settings.data_go_kr_service_key,
@@ -238,6 +243,7 @@ def sync_animal_locations(db: Session) -> None:
     body = response.json().get("body", {})
     raw_items = body.get("items", {}).get("item", [])
     entries = raw_items if isinstance(raw_items, list) else [raw_items]
+    matched_count = 0
     for entry in entries:
         animal_name = entry.get("kordesc")
         location_name = entry.get("lname")
@@ -247,24 +253,42 @@ def sync_animal_locations(db: Session) -> None:
         animal = db.scalar(select(Animal).where(func.replace(Animal.name, " ", "") == normalized))
         if animal is not None:
             animal.location_name = location_name
+            matched_count += 1
     db.commit()
+    return matched_count
 
 
-def crawl_catalog_job() -> None:
-    session_factory = sessionmaker(bind=get_engine())
-    with session_factory() as db:
-        try:
-            upsert_animals(db, crawl_all_animals())
-        except Exception:
-            db.rollback()
-            logger.warning("동물 도감 크롤링 실패", exc_info=True)
-        try:
-            upsert_plants(db, crawl_all_plants())
-        except Exception:
-            db.rollback()
-            logger.warning("식물 도감 크롤링 실패", exc_info=True)
-        try:
-            sync_animal_locations(db)
-        except Exception:
-            db.rollback()
-            logger.warning("동물 위치 정보 동기화 실패", exc_info=True)
+def crawl_catalog_job() -> CatalogCrawlResult:
+    with JobRunGuard("crawl_catalog"):
+        session_factory = sessionmaker(bind=get_engine())
+        with session_factory() as db:
+            try:
+                count = upsert_animals(db, crawl_all_animals())
+                animals_result = CrawlResult(success=True, collected_count=count)
+            except Exception:
+                db.rollback()
+                logger.warning("동물 도감 크롤링 실패", exc_info=True)
+                animals_result = CrawlResult(
+                    success=False, collected_count=0, message="동물 도감 크롤링 실패"
+                )
+            try:
+                count = upsert_plants(db, crawl_all_plants())
+                plants_result = CrawlResult(success=True, collected_count=count)
+            except Exception:
+                db.rollback()
+                logger.warning("식물 도감 크롤링 실패", exc_info=True)
+                plants_result = CrawlResult(
+                    success=False, collected_count=0, message="식물 도감 크롤링 실패"
+                )
+            try:
+                count = sync_animal_locations(db)
+                locations_result = CrawlResult(success=True, collected_count=count)
+            except Exception:
+                db.rollback()
+                logger.warning("동물 위치 정보 동기화 실패", exc_info=True)
+                locations_result = CrawlResult(
+                    success=False, collected_count=0, message="동물 위치 정보 동기화 실패"
+                )
+        return CatalogCrawlResult(
+            animals=animals_result, plants=plants_result, locations=locations_result
+        )

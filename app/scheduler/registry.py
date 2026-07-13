@@ -15,7 +15,7 @@ from app.domains.weather.service import crawl_weather_job
 
 logger = logging.getLogger(__name__)
 
-JobRegistry = dict[str, Callable[[], None]]
+JobRegistry = dict[str, Callable[[], object]]
 
 JOB_REGISTRY: JobRegistry = {
     "crawl_congestion": crawl_congestion_job,

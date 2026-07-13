@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.job_lock import JobAlreadyRunningError
 from app.core.openapi import COMMON_ERRORS, error_response
+from app.core.schema import CrawlResult
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.facility import service
@@ -52,6 +54,30 @@ def list_operating_hours(db: Session = Depends(get_db)) -> list[OperatingHoursSe
     """
     sections = service.list_operating_hours_sections(db)
     return [OperatingHoursSectionResponse.model_validate(s) for s in sections]
+
+
+_OPERATING_HOURS_CRAWL_ALREADY_RUNNING_RESPONSE = error_response(
+    "CONFLICT",
+    "operating hours crawl already running",
+    "crawl_operating_hours job이 이미 실행 중(스케줄된 실행 포함)",
+)
+
+
+@router.post(
+    "/operating-hours/crawl",
+    response_model=CrawlResult,
+    summary="운영시간 안내 데이터 즉시 수집",
+    responses={**COMMON_ERRORS, 409: _OPERATING_HOURS_CRAWL_ALREADY_RUNNING_RESPONSE},
+)
+def trigger_operating_hours_crawl() -> CrawlResult:
+    """스케줄과 무관하게 운영시간 안내 크롤링을 즉시 실행하고 완료될 때까지 대기한 뒤 결과를
+    반환한다. 이미 같은 수집(스케줄된 실행 포함)이 진행 중이면 409를 반환한다.
+    """
+    try:
+        return service.crawl_operating_hours_job()
+    except JobAlreadyRunningError:
+        detail = "operating hours crawl already running"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
 
 
 @router.post(

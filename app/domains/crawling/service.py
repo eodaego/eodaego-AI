@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.job_lock import JobRunGuard
+from app.core.schema import CrawlResult
 from app.db.session import get_engine
 from app.domains.crawling.model import CongestionSnapshot, ScheduleConfig
 from app.domains.crawling.schema import ScheduleConfigCreate, ScheduleConfigUpdate
@@ -84,12 +86,15 @@ def list_congestion_snapshots(db: Session, limit: int = 20) -> list[CongestionSn
     return list(db.scalars(stmt).all())
 
 
-def crawl_congestion_job() -> None:
-    session_factory = sessionmaker(bind=get_engine())
-    with session_factory() as db:
-        try:
-            live_status = fetch_congestion_from_seoul_api()
-            save_congestion_snapshot(db, live_status)
-        except Exception:
-            db.rollback()
-            logger.warning("혼잡도 수집 실패", exc_info=True)
+def crawl_congestion_job() -> CrawlResult:
+    with JobRunGuard("crawl_congestion"):
+        session_factory = sessionmaker(bind=get_engine())
+        with session_factory() as db:
+            try:
+                live_status = fetch_congestion_from_seoul_api()
+                save_congestion_snapshot(db, live_status)
+            except Exception:
+                db.rollback()
+                logger.warning("혼잡도 수집 실패", exc_info=True)
+                return CrawlResult(success=False, collected_count=0, message="혼잡도 수집 실패")
+        return CrawlResult(success=True, collected_count=1)

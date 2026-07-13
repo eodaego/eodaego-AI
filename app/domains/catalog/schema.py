@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.kst import KstDatetime
+from app.core.schema import CrawlResult
 
 _MSG_SEQ_DESC = (
     "원본 게시판(서울시설공단 어린이대공원 도감) 글 번호. 이 서버 PK는 아니지만 원본 기준 "
@@ -51,3 +52,15 @@ class PlantResponse(BaseModel):
     thumbnail_url: str | None = Field(description=_THUMBNAIL_URL_DESC)
     source_url: str = Field(description=_SOURCE_URL_DESC)
     updated_at: KstDatetime = Field(description=_UPDATED_AT_DESC)
+
+
+class CatalogCrawlResult(BaseModel):
+    """도감 즉시 수집 트리거 응답. 동물/식물/위치동기화 3단계가 각각 독립적으로 실패할 수
+    있어(예: 동물은 성공, 식물은 실패) 하나의 success/count로 뭉치지 않고 단계별로 노출한다."""
+
+    animals: CrawlResult = Field(description="동물 도감 수집 결과")
+    plants: CrawlResult = Field(description="식물 도감 수집 결과")
+    locations: CrawlResult = Field(
+        description="동물 위치 동기화 결과. collected_count는 이름 매칭에 성공해 "
+        "location_name이 갱신된 동물 수(공공데이터포털 원본 항목 수가 아님)."
+    )

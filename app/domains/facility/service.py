@@ -6,6 +6,8 @@ from bs4 import BeautifulSoup
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.job_lock import JobRunGuard
+from app.core.schema import CrawlResult
 from app.db.session import get_engine
 from app.domains.facility.model import AmusementRide, Facility, OperatingHoursSection
 from app.domains.facility.schema import AmusementRideCreate, AmusementRideUpdate
@@ -50,18 +52,25 @@ def list_operating_hours_sections(db: Session) -> list[OperatingHoursSection]:
     return list(db.scalars(stmt).all())
 
 
-def crawl_operating_hours_job() -> None:
-    session_factory = sessionmaker(bind=get_engine())
-    with session_factory() as db:
-        try:
-            sections = crawl_operating_hours()
-            if not sections:
-                logger.warning("운영시간 크롤링 결과가 비어있어 기존 데이터를 유지합니다")
-                return
-            replace_operating_hours_sections(db, sections)
-        except Exception:
-            db.rollback()
-            logger.warning("운영시간 크롤링 실패", exc_info=True)
+def crawl_operating_hours_job() -> CrawlResult:
+    with JobRunGuard("crawl_operating_hours"):
+        session_factory = sessionmaker(bind=get_engine())
+        with session_factory() as db:
+            try:
+                sections = crawl_operating_hours()
+                if not sections:
+                    logger.warning("운영시간 크롤링 결과가 비어있어 기존 데이터를 유지합니다")
+                    return CrawlResult(
+                        success=False,
+                        collected_count=0,
+                        message="크롤링 결과가 비어있음",
+                    )
+                replace_operating_hours_sections(db, sections)
+            except Exception:
+                db.rollback()
+                logger.warning("운영시간 크롤링 실패", exc_info=True)
+                return CrawlResult(success=False, collected_count=0, message="운영시간 크롤링 실패")
+        return CrawlResult(success=True, collected_count=len(sections))
 
 
 def create_amusement_ride(db: Session, data: AmusementRideCreate) -> AmusementRide:
