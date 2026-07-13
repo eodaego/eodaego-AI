@@ -69,9 +69,7 @@ def crawl_operating_hours_job() -> CrawlResult:
             except Exception:
                 db.rollback()
                 logger.warning("운영시간 크롤링 실패", exc_info=True)
-                return CrawlResult(
-                    success=False, collected_count=0, message="운영시간 크롤링 실패"
-                )
+                return CrawlResult(success=False, collected_count=0, message="운영시간 크롤링 실패")
         return CrawlResult(success=True, collected_count=len(sections))
 
 
