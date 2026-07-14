@@ -16,7 +16,7 @@
 
 ## Important directories
 
-- app/domains/: 도메인별 API 계층(router/service/schema/model.py). 현재 `crawling`, `prompt`만 구현되어 있다. `recommendation`(AI 코스 추천, 서비스의 핵심 기능)은 `docs/superpowers/specs/2026-07-06-ai-service-separation-design.md`에 설계만 되어 있고 아직 코드가 없다 — 향후 이 컨벤션을 그대로 따라 추가될 예정.
+- app/domains/: 도메인별 API 계층(router/service/schema/model.py). 현재 `ai`(개인 LLM 서버 챗 프록시), `catalog`(동식물 도감 크롤링·CRUD, 위치 동기화 포함), `crawling`(스케줄 설정 CRUD + 혼잡도 크롤링), `facility`(놀이기구·운영시간 등 시설 정보), `prompt`(프롬프트 템플릿 CRUD), `weather`(날씨 스냅샷 크롤링)가 구현되어 있다. `recommendation`(AI 코스 추천, 서비스의 핵심 기능)은 `docs/superpowers/specs/2026-07-06-ai-service-separation-design.md`에 설계만 되어 있고 아직 코드가 없다 — 향후 이 컨벤션을 그대로 따라 추가될 예정.
 - app/core/: 도메인 무관 공통 기반 — 설정(`config.py`), 내부 인증(`security.py`), 로깅(`logging.py`), 공통 에러 응답(`errors.py`)
 - app/db/: SQLAlchemy `Base` 선언 및 동기 엔진/세션 팩토리
 - app/scheduler/: 앱 기동 시 `schedule_config` 테이블을 조회해 APScheduler job을 재등록하는 registry
@@ -47,7 +47,7 @@
   - 테스트 코드를 작성하지 않는다(pytest, testcontainers, `tests/` 디렉터리 등 전부 미사용) — 2026-07-09 결정, `eodaego-server`와 동일 정책. 신규 기능 검증은 Swagger UI(`/docs`)·curl 등 수동 확인 또는 `ruff`/`mypy` 정적 검사로 대체한다.
   - SQLAlchemy는 동기(sync) 엔진만 사용한다(`psycopg` sync 드라이버). 라우터는 `async def`가 아닌 `def`로 작성해 FastAPI가 스레드풀에서 실행하도록 둔다. APScheduler 크롤링 job도 동일한 동기 세션 패턴을 재사용한다.
   - CORS 미들웨어를 추가하지 않는다. AI는 브라우저(FE/관리자)에서 직접 호출되지 않고 BE만 호출한다.
-  - AI는 동식물 도감 데이터를 직접 저장하지 않는다(BE 소유 테이블). 크롤링 결과는 BE 관리자 API 호출로만 반영한다(아직 미구현).
+  - AI는 크롤링한 동식물 도감 데이터(`catalog` 도메인의 `Animal`/`Plant` 테이블, 위치 동기화 포함)를 자체 DB에 저장한다(추천 로직 등 AI 내부용). 사용자에게 노출되는 도감 화면·수집 진행도는 여전히 BE 소유이며, AI → BE로 크롤링 결과를 반영하는 연동은 아직 미구현이다.
   - APScheduler jobstore는 `SQLAlchemyJobStore`가 아닌 기본 `MemoryJobStore`를 사용한다. 스케줄 "설정값"만 `schedule_config` 테이블에 저장하고, 앱 기동 시 `bootstrap_scheduler()`가 이를 읽어 `scheduler.add_job()`으로 재등록한다.
 - 사용 금지 기술 / 패턴: Django/Flask(FastAPI로 확정), BE·AI를 하나의 docker-compose로 통합하는 방식(독립 배포 파이프라인 유지), OAuth2/JWT 기반 BE-AI 인증(사용자 인증이 아닌 내부 신뢰 채널이므로 정적 공유 키로 충분하다고 판단해 기각), APScheduler `SQLAlchemyJobStore`(job 함수 pickle 직렬화로 인한 재시작 시 역직렬화 실패 위험 때문에 기각)
 - 현재 프로젝트에서 중요하게 보는 품질 기준: `ruff`(E, F, I, UP, B) 0 errors, `mypy --strict` 통과, 도메인 기반 폴더 구조 유지(파일당 200~400라인, router는 HTTP 계층만·비즈니스 로직은 service), 모든 예외를 `core/errors.py`의 공통 에러 응답 포맷으로 통일

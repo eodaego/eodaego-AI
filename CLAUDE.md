@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `eodaego-ai` is the internal-only AI backend for **어대GO**, a mobile app where visitors to Seoul Children's Grand Park follow AI-recommended routes, photograph animals/plants/places, and complete a "collection" (도감) via quizzes. This FastAPI service is never called by the mobile app (Flutter) or by any browser directly — every request comes from `eodaego-server` (Spring Boot, BE) over a private Docker bridge network (`eodaego-internal`), authenticated with a shared `X-Internal-Api-Key` header.
 
-Currently implemented domains: `crawling` (schedule-config CRUD driving APScheduler jobs) and `prompt` (prompt-template CRUD). The `recommendation` domain (LLM-based course recommendation — the app's core feature) is designed (see `docs/superpowers/specs/2026-07-06-ai-service-separation-design.md`) but not yet implemented.
+Currently implemented domains: `ai` (LLM chat passthrough to the personal LLM server), `catalog` (animal/plant 도감 crawling + CRUD, with location sync against a public-data API), `crawling` (schedule-config CRUD driving APScheduler jobs, plus congestion crawling), `facility` (park facilities/amusement rides/operating-hours info), `prompt` (prompt-template CRUD), and `weather` (weather snapshot crawling). The `recommendation` domain (LLM-based course recommendation — the app's core feature) is designed (see `docs/superpowers/specs/2026-07-06-ai-service-separation-design.md`) but not yet implemented.
 
 Project rules live in `.claude/rules/*.md` — read those for team conventions, architecture boundaries, testing policy, and delivery/PR process. This file only covers commands and architecture that require reading multiple files to piece together.
 
