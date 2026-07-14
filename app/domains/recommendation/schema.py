@@ -20,7 +20,7 @@ class RecommendationRoutesRequest(BaseModel):
     )
     stay_duration_minutes: int = Field(description="예상 체류 시간(분).", examples=[120], gt=0)
     start_location: str = Field(
-        description="시작 위치(자유 텍스트, 예: 정문/후문).", examples=["정문"]
+        description="시작 위치(자유 텍스트, 예: 정문/후문).", examples=["정문"], max_length=100
     )
     with_children: bool = Field(description="어린이 동반 여부.", examples=[True])
 

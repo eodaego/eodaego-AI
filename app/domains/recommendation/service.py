@@ -1,3 +1,4 @@
+import logging
 from string import Template
 
 from fastapi import HTTPException, status
@@ -17,6 +18,8 @@ from app.domains.recommendation.schema import (
 )
 from app.domains.weather.model import WeatherSnapshot
 from app.domains.weather.service import get_latest_weather_snapshot
+
+logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
 
@@ -94,10 +97,14 @@ def _parse_llm_response(content: str, valid_facility_ids: set[int]) -> Recommend
     try:
         parsed = RecommendationRoutesResponse.model_validate_json(_strip_markdown_fences(content))
     except ValidationError as exc:
+        logger.warning("LLM 응답 파싱 실패", exc_info=True)
         raise RuntimeError(f"LLM 응답 파싱 실패: {exc}") from exc
     for course in parsed.courses:
         for stop in course.stops:
             if stop.facility_id not in valid_facility_ids:
+                logger.warning(
+                    "LLM 응답에 존재하지 않는 facility_id가 포함됨: %s", stop.facility_id
+                )
                 raise RuntimeError(
                     f"LLM 응답에 존재하지 않는 facility_id가 포함됨: {stop.facility_id}"
                 )
