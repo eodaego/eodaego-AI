@@ -12,6 +12,7 @@ class PromptTemplate(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     model: Mapped[str] = mapped_column(String(100))
+    purpose: Mapped[str] = mapped_column(String(20))
     template_text: Mapped[str] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     updated_at: Mapped[datetime] = mapped_column(
