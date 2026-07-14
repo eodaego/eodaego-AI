@@ -16,6 +16,7 @@ from app.domains.crawling.router import congestion_router
 from app.domains.crawling.router import router as crawling_router
 from app.domains.facility.router import router as facility_router
 from app.domains.prompt.router import router as prompt_router
+from app.domains.recommendation.router import router as recommendation_router
 from app.domains.weather.router import router as weather_router
 from app.scheduler.registry import JOB_REGISTRY, bootstrap_scheduler
 
@@ -56,6 +57,11 @@ app = FastAPI(
             "description": "AI 챗 응답 생성에 사용되는 프롬프트 템플릿 CRUD (BE 관리자 SSR 페이지가 호출)",  # noqa: E501
         },
         {
+            "name": "recommendation",
+            "description": "선호 태그·체류 시간 등 사용자 입력만으로 Facility·날씨·혼잡도를 "
+            "조합해 추천 동선을 생성 (개인 LLM 서버 호출)",
+        },
+        {
             "name": "crawling",
             "description": "크롤링 작업 실행 스케줄 설정 CRUD (DB에는 즉시 반영되지만, "
             "실제 스케줄러 등록은 AI 서버 재시작 시점에만 이루어짐)",
@@ -82,6 +88,7 @@ app = FastAPI(
 register_exception_handlers(app)
 app.include_router(ai_router)
 app.include_router(prompt_router)
+app.include_router(recommendation_router)
 app.include_router(crawling_router)
 app.include_router(congestion_router)
 app.include_router(catalog_router)
