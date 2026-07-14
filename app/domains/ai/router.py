@@ -5,7 +5,7 @@ from app.core.openapi import COMMON_ERRORS, error_response
 from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.ai import service
-from app.domains.ai.schema import AiChatRequest, AiChatResponse
+from app.domains.ai.schema import AiChatRequest, AiChatResponse, AiModelListResponse
 
 router = APIRouter(
     prefix="/api/v1/ai",
@@ -52,3 +52,29 @@ def chat(data: AiChatRequest, db: Session = Depends(get_db)) -> AiChatResponse:
     """
     content = service.generate_chat_response(db, data)
     return AiChatResponse(content=content)
+
+
+@router.get(
+    "/models",
+    response_model=AiModelListResponse,
+    summary="SUH-AIder 사용 가능 모델 목록 조회",
+    response_description="SUH-AIder(Ollama 호환)에 등록된 모델 목록",
+    responses={
+        **COMMON_ERRORS,
+        502: error_response(
+            "BAD_GATEWAY",
+            "SUH-AIder /api/tags 호출 실패 (status=500)",
+            "SUH-AIder 호출이 실패했거나(연결 오류·타임아웃·4xx/5xx) 응답 형식이 예상과 다름",
+        ),
+    },
+)
+def list_models() -> AiModelListResponse:
+    """SUH-AIder(Ollama 호환 REST API)의 `GET /api/tags`를 호출해 현재 등록된 모델 목록을
+    가공 없이 그대로 반환한다.
+
+    프롬프트 템플릿(`/api/v1/prompts`)의 `model` 필드에 어떤 값을 넣을지 참고하는 용도로
+    쓰인다. 이 API 자체는 `model` 값을 검증하거나 강제하지 않는다.
+
+    DB 조회가 없는 순수 SUH-AIder 프록시이므로 다른 엔드포인트와 달리 DB 세션 의존성이 없다.
+    """
+    return service.get_available_models()
