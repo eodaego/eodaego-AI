@@ -9,7 +9,7 @@ from app.domains.prompt.service import get_active_prompt_template
 
 
 def generate_chat_response(db: Session, data: AiChatRequest) -> str:
-    prompt = get_active_prompt_template(db)
+    prompt = get_active_prompt_template(db, purpose="chat")
     if prompt is None:
         detail = "활성화된 프롬프트가 없습니다"
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
