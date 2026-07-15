@@ -16,6 +16,7 @@ from app.domains.recommendation.schema import (
     PreferenceTag,
     RecommendationRoutesRequest,
     RecommendationRoutesResponse,
+    RouteStop,
 )
 from app.domains.weather.model import WeatherSnapshot
 from app.domains.weather.service import get_latest_weather_snapshot
@@ -24,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
 _ENTRANCE_CATEGORY = "출입문"
+_MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
+    200  # 관리자 입력 자유 텍스트가 프롬프트를 과도하게 지배하지 않도록 제한
+)
 
 _PREFERENCE_TAG_CATEGORIES: dict[PreferenceTag, tuple[str, ...]] = {
     "ANIMAL": ("동물나라",),
@@ -72,7 +76,7 @@ def _format_facility_candidate(facility: Facility) -> str:
         if facility.latitude is not None and facility.longitude is not None
         else "위치 정보 없음"
     )
-    description = facility.intro or facility.description or ""
+    description = (facility.intro or facility.description or "")[:_MAX_DESCRIPTION_LENGTH_IN_PROMPT]
     return (
         f"- id={facility.id}, name={facility.name}, category={facility.category}, "
         f"위치={location}, 설명={description}"
@@ -123,7 +127,27 @@ def _strip_markdown_fences(text: str) -> str:
     return "\n".join(lines)
 
 
-def _parse_llm_response(content: str, valid_facility_ids: set[int]) -> RecommendationRoutesResponse:
+def _validate_course_stops(stops: list[RouteStop], entrance_id: int, exit_facility_id: int) -> None:
+    if not stops:
+        raise RuntimeError("LLM 응답 코스의 stops가 비어있음")
+    if stops[0].facility_id != entrance_id:
+        raise RuntimeError(
+            f"LLM 응답 코스의 첫 정류지가 입구(id={entrance_id})가 아님: {stops[0].facility_id}"
+        )
+    if stops[-1].facility_id != exit_facility_id:
+        raise RuntimeError(
+            f"LLM 응답 코스의 마지막 정류지가 출구(id={exit_facility_id})가 아님: "
+            f"{stops[-1].facility_id}"
+        )
+    expected_orders = list(range(1, len(stops) + 1))
+    actual_orders = [stop.order for stop in stops]
+    if actual_orders != expected_orders:
+        raise RuntimeError(f"LLM 응답 코스의 order가 1부터 연속하지 않음: {actual_orders}")
+
+
+def _parse_llm_response(
+    content: str, valid_facility_ids: set[int], entrance_id: int, exit_facility_id: int
+) -> RecommendationRoutesResponse:
     try:
         parsed = RecommendationRoutesResponse.model_validate_json(_strip_markdown_fences(content))
     except ValidationError as exc:
@@ -138,6 +162,7 @@ def _parse_llm_response(content: str, valid_facility_ids: set[int]) -> Recommend
                 raise RuntimeError(
                     f"LLM 응답에 존재하지 않는 facility_id가 포함됨: {stop.facility_id}"
                 )
+        _validate_course_stops(course.stops, entrance_id, exit_facility_id)
     return parsed
 
 
@@ -167,7 +192,18 @@ def generate_recommendation(
     variables = _build_prompt_variables(
         candidates, entrance, exit_facility, weather, congestion, data
     )
-    system_content = Template(prompt.template_text).safe_substitute(variables)
+    template = Template(prompt.template_text)
+    missing_vars = template.get_identifiers() - variables.keys()
+    if missing_vars:
+        # 활성 템플릿이 최신 변수명(entrance/exit/companion_type 등)으로 갱신되지 않은 경우를
+        # 조용히 넘어가지 않고 로그로 남긴다 — safe_substitute는 매핑에 없는 자리표시자를
+        # 에러 없이 그대로 남기므로, 이 로그가 없으면 배포 후 무음 실패가 된다.
+        logger.warning(
+            "프롬프트 템플릿에 이번 요청에서 채워지지 않은 변수가 있음(오래된 플레이스홀더일 "
+            "가능성): %s",
+            sorted(missing_vars),
+        )
+    system_content = template.safe_substitute(variables)
     messages = [{"role": "system", "content": system_content}]
     valid_facility_ids = {facility.id for facility in candidates} | {
         entrance.id,
@@ -178,7 +214,7 @@ def generate_recommendation(
     for _ in range(_MAX_ATTEMPTS):
         try:
             content = call_chat(model=prompt.model, messages=messages)
-            return _parse_llm_response(content, valid_facility_ids)
+            return _parse_llm_response(content, valid_facility_ids, entrance.id, exit_facility.id)
         except RuntimeError as exc:
             last_error = exc
     raise HTTPException(

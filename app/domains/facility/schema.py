@@ -95,13 +95,17 @@ class AmusementRideResponse(BaseModel):
 
 
 class FacilityCreate(BaseModel):
-    category: str = Field(description="시설 분류.", examples=["출입문"])
-    name: str = Field(description="시설 이름.", examples=["정문"])
+    category: str = Field(
+        description="시설 분류.", examples=["출입문"], min_length=1, max_length=50
+    )
+    name: str = Field(description="시설 이름.", examples=["정문"], min_length=1, max_length=100)
     intro: str | None = Field(default=None, description="간단 소개. 생략 시 null.")
     description: str | None = Field(default=None, description="상세 설명. 생략 시 null.")
     latitude: float | None = Field(default=None, description="위도. 생략 시 null.")
     longitude: float | None = Field(default=None, description="경도. 생략 시 null.")
-    facility_type: str | None = Field(default=None, description="세부 시설 유형. 생략 시 null.")
+    facility_type: str | None = Field(
+        default=None, description="세부 시설 유형. 생략 시 null.", max_length=50
+    )
 
 
 class FacilityUpdate(BaseModel):
@@ -109,18 +113,22 @@ class FacilityUpdate(BaseModel):
         default=None,
         description="시설 분류. 필드를 생략하면 기존 값 유지, 명시적으로 null을 보내면 "
         "422(DB NOT NULL 제약 반영).",
+        min_length=1,
+        max_length=50,
     )
     name: str | None = Field(
         default=None,
         description="시설 이름. 필드를 생략하면 기존 값 유지, 명시적으로 null을 보내면 "
         "422(DB NOT NULL 제약 반영).",
+        min_length=1,
+        max_length=100,
     )
     intro: str | None = Field(default=None, description="간단 소개. 생략 시 기존 값 유지.")
     description: str | None = Field(default=None, description="상세 설명. 생략 시 기존 값 유지.")
     latitude: float | None = Field(default=None, description="위도. 생략 시 기존 값 유지.")
     longitude: float | None = Field(default=None, description="경도. 생략 시 기존 값 유지.")
     facility_type: str | None = Field(
-        default=None, description="세부 시설 유형. 생략 시 기존 값 유지."
+        default=None, description="세부 시설 유형. 생략 시 기존 값 유지.", max_length=50
     )
 
     @field_validator("category")
