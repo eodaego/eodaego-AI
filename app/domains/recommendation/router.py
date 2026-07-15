@@ -40,9 +40,10 @@ _MAPPING_NOT_FOUND_RESPONSE = error_response(
             "선택한 선호 태그에 해당하는 추천 후보가 없습니다",
             "요청 스키마 자체가 잘못됐을 때(COMMON_ERRORS의 VALIDATION_ERROR)도 이 상태 코드가 "
             "나올 수 있다. 이 문서 예시는 스키마는 유효하지만 preference_tags에 매핑되는 "
-            "Facility 후보가 0건이거나(PHOTO_SPOT/CULTURE_EVENT/LEARNING만 선택한 경우 포함), "
-            'entrance_facility_id/exit_facility_id가 category="출입문"인 Facility를 가리키지 '
-            "않아 처리 불가능한 경우다",
+            "Facility 후보가 0건이거나(GET /api/v1/recommendation/preference-mappings로 조회 "
+            "가능한 매핑이 하나도 없는 태그만 선택한 경우 포함), entrance_facility_id/"
+            'exit_facility_id가 category="출입문"인 Facility를 가리키지 않아 처리 불가능한 '
+            "경우다",
         ),
         503: error_response(
             "SERVICE_UNAVAILABLE",

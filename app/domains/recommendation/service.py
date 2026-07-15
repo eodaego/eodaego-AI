@@ -32,15 +32,6 @@ _MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
     200  # 관리자 입력 자유 텍스트가 프롬프트를 과도하게 지배하지 않도록 제한
 )
 
-_PREFERENCE_TAG_CATEGORIES: dict[PreferenceTag, tuple[str, ...]] = {
-    "ANIMAL": ("동물나라",),
-    "NATURE": ("자연나라", "조경시설"),
-    "ACTIVITY": ("재미나라", "체험시설", "운동 및 대관시설"),
-    "RELAXATION": ("조경시설",),
-}
-# PHOTO_SPOT/CULTURE_EVENT/LEARNING은 매핑되는 Facility.category가 아직 없어 dict에 없음
-# (선택 시 후보 0건 → 422. 관리자 편집 기능은 별도 이슈로 분리됨)
-
 _COMPANION_TYPE_HINTS: dict[CompanionType, str] = {
     "ALONE": "관심사 중심, 이동 효율 우선, 조용한 코스 가능",
     "WITH_CHILD": "짧은 이동, 쉬운 퀴즈, 체험형 장소, 화장실·휴식 공간 고려",
@@ -83,9 +74,10 @@ def delete_preference_category_mapping(db: Session, mapping: PreferenceCategoryM
 def _select_candidate_facilities(
     db: Session, preference_tags: list[PreferenceTag]
 ) -> list[Facility]:
-    target_categories = {
-        category for tag in preference_tags for category in _PREFERENCE_TAG_CATEGORIES.get(tag, ())
-    }
+    stmt = select(PreferenceCategoryMapping.category).where(
+        PreferenceCategoryMapping.preference_tag.in_(preference_tags)
+    )
+    target_categories = set(db.scalars(stmt).all())
     return [f for f in list_facilities(db) if f.category in target_categories]
 
 

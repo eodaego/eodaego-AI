@@ -10,11 +10,10 @@ PreferenceTag = Literal[
 CompanionType = Literal["ALONE", "WITH_CHILD", "WITH_PARTNER", "WITH_FRIENDS", "WITH_ELDERLY"]
 
 _PREFERENCE_TAGS_DESC = (
-    "추천 동선에 반영할 취향 태그. 복수 선택 가능, 최소 1개 필요. "
-    "ANIMAL(동물 관람)/NATURE(자연친화)/ACTIVITY(액티비티)/RELAXATION(휴식·산책)은 "
-    "Facility.category에 매핑되어 후보로 반영된다. PHOTO_SPOT(포토스팟)/"
-    "CULTURE_EVENT(행사·문화)/LEARNING(학습·퀴즈)은 아직 매핑되는 Facility.category가 없어 "
-    "이 태그만 선택하면 추천 후보 0건(422)이 될 수 있다."
+    "추천 동선에 반영할 취향 태그. 복수 선택 가능, 최소 1개 필요. 태그 → Facility.category "
+    "매핑은 관리자가 GET/POST/DELETE /api/v1/recommendation/preference-mappings로 직접 "
+    "관리하며(초기 데이터는 ANIMAL/NATURE/ACTIVITY/RELAXATION만 매핑되어 있다), 매핑이 하나도 "
+    "없는 태그만 선택하면 추천 후보 0건(422)이 될 수 있다."
 )
 _COMPANION_TYPE_DESC = (
     "동반자 유형. 단일 선택. ALONE(혼자 방문)/WITH_CHILD(아이와 함께)/"
