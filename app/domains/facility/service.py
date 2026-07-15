@@ -10,15 +10,48 @@ from app.core.job_lock import JobRunGuard
 from app.core.schema import CrawlResult
 from app.db.session import get_engine
 from app.domains.facility.model import AmusementRide, Facility, OperatingHoursSection
-from app.domains.facility.schema import AmusementRideCreate, AmusementRideUpdate
+from app.domains.facility.schema import (
+    AmusementRideCreate,
+    AmusementRideUpdate,
+    FacilityCreate,
+    FacilityUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
 USE_JSP_URL = "https://www.sisul.or.kr/open_content/childrenpark/introduce/use.jsp"
 
 
-def list_facilities(db: Session) -> list[Facility]:
-    return list(db.scalars(select(Facility)).all())
+def list_facilities(db: Session, category: str | None = None) -> list[Facility]:
+    stmt = select(Facility)
+    if category is not None:
+        stmt = stmt.where(Facility.category == category)
+    return list(db.scalars(stmt).all())
+
+
+def create_facility(db: Session, data: FacilityCreate) -> Facility:
+    facility = Facility(**data.model_dump(), external_id=None)
+    db.add(facility)
+    db.commit()
+    db.refresh(facility)
+    return facility
+
+
+def get_facility(db: Session, facility_id: int) -> Facility | None:
+    return db.get(Facility, facility_id)
+
+
+def update_facility(db: Session, facility: Facility, data: FacilityUpdate) -> Facility:
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(facility, field, value)
+    db.commit()
+    db.refresh(facility)
+    return facility
+
+
+def delete_facility(db: Session, facility: Facility) -> None:
+    db.delete(facility)
+    db.commit()
 
 
 def crawl_operating_hours() -> list[dict[str, Any]]:
