@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.domains.catalog.service import crawl_catalog_job
 from app.domains.crawling.model import ScheduleConfig
 from app.domains.crawling.service import crawl_congestion_job
+from app.domains.event.service import crawl_event_job
 from app.domains.facility.service import crawl_operating_hours_job
 from app.domains.weather.service import crawl_weather_job
 
@@ -22,6 +23,7 @@ JOB_REGISTRY: JobRegistry = {
     "crawl_catalog": crawl_catalog_job,
     "crawl_operating_hours": crawl_operating_hours_job,
     "crawl_weather": crawl_weather_job,
+    "crawl_event": crawl_event_job,
 }
 
 

@@ -14,6 +14,7 @@ from app.domains.ai.router import router as ai_router
 from app.domains.catalog.router import router as catalog_router
 from app.domains.crawling.router import congestion_router
 from app.domains.crawling.router import router as crawling_router
+from app.domains.event.router import router as event_router
 from app.domains.facility.router import router as facility_router
 from app.domains.prompt.router import router as prompt_router
 from app.domains.recommendation.router import router as recommendation_router
@@ -82,6 +83,11 @@ app = FastAPI(
             "name": "weather",
             "description": "기상청 API 기반 어린이대공원 날씨 스냅샷 조회 (조회 전용)",
         },
+        {
+            "name": "event",
+            "description": "서울 열린데이터광장 공공API 기반 어린이대공원 행사·공연 정보 조회 "
+            "(조회 전용, 수집은 crawl_event 스케줄 job이 담당)",
+        },
     ],
     lifespan=lifespan,
 )
@@ -94,6 +100,7 @@ app.include_router(congestion_router)
 app.include_router(catalog_router)
 app.include_router(facility_router)
 app.include_router(weather_router)
+app.include_router(event_router)
 
 
 @app.get("/health")

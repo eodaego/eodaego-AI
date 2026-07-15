@@ -14,6 +14,7 @@ from app.domains.crawling.model import (  # noqa: E402, F401
     CongestionSnapshot,
     ScheduleConfig,
 )
+from app.domains.event.model import CulturalEvent  # noqa: E402, F401
 from app.domains.facility.model import (  # noqa: E402, F401
     AmusementRide,
     Facility,

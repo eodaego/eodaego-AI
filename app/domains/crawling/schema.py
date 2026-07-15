@@ -5,10 +5,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.kst import KstDatetime
 
 _JOB_ID_DESC = (
-    "실행할 크롤링 작업 식별자. 아래 4개 값 중 하나여야 실제로 스케줄러에 등록된다 "
+    "실행할 크롤링 작업 식별자. 아래 5개 값 중 하나여야 실제로 스케줄러에 등록된다 "
     "(그 외 값은 저장은 되지만 다음 서버 재시작 시 조용히 스킵됨): "
     "`crawl_congestion`(혼잡도), `crawl_catalog`(동식물 도감), "
-    "`crawl_operating_hours`(운영시간), `crawl_weather`(날씨). "
+    "`crawl_operating_hours`(운영시간), `crawl_weather`(날씨), `crawl_event`(행사·공연). "
     "DB 유니크 제약이 있으며 중복 시 500이 발생한다(별도 409 처리 없음)."
 )
 _TRIGGER_TYPE_DESC = "interval: 일정 간격 반복 실행 / cron: crontab 표현식 기반 실행"
