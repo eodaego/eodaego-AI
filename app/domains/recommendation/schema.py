@@ -1,6 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.core.kst import KstDatetime
 
 PreferenceTag = Literal[
     "ANIMAL", "NATURE", "ACTIVITY", "PHOTO_SPOT", "RELAXATION", "CULTURE_EVENT", "LEARNING"
@@ -51,3 +53,22 @@ class RecommendedCourse(BaseModel):
 
 class RecommendationRoutesResponse(BaseModel):
     courses: list[RecommendedCourse] = Field(description="추천 코스 목록.")
+
+
+class PreferenceCategoryMappingCreate(BaseModel):
+    preference_tag: PreferenceTag = Field(description="매핑할 취향 태그.", examples=["ANIMAL"])
+    category: str = Field(
+        description="매핑할 Facility.category 값.",
+        examples=["동물나라"],
+        min_length=1,
+        max_length=50,
+    )
+
+
+class PreferenceCategoryMappingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="매핑 PK")
+    preference_tag: PreferenceTag = Field(description="매핑된 취향 태그")
+    category: str = Field(description="매핑된 Facility.category 값")
+    updated_at: KstDatetime = Field(description="마지막 수정 시각 (KST)")

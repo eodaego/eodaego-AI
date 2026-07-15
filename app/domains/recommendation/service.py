@@ -3,6 +3,7 @@ from string import Template
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domains.ai.suh_aider_client import call_chat
@@ -11,8 +12,10 @@ from app.domains.crawling.service import list_congestion_snapshots
 from app.domains.facility.model import Facility
 from app.domains.facility.service import get_facility, list_facilities
 from app.domains.prompt.service import get_active_prompt_template
+from app.domains.recommendation.model import PreferenceCategoryMapping
 from app.domains.recommendation.schema import (
     CompanionType,
+    PreferenceCategoryMappingCreate,
     PreferenceTag,
     RecommendationRoutesRequest,
     RecommendationRoutesResponse,
@@ -45,6 +48,36 @@ _COMPANION_TYPE_HINTS: dict[CompanionType, str] = {
     "WITH_FRIENDS": "액티비티, 넓은 동선, 활동형 장소",
     "WITH_ELDERLY": "짧은 이동, 평지 위주, 휴식 공간 자주 포함",
 }
+
+
+def create_preference_category_mapping(
+    db: Session, data: PreferenceCategoryMappingCreate
+) -> PreferenceCategoryMapping:
+    mapping = PreferenceCategoryMapping(**data.model_dump())
+    db.add(mapping)
+    db.commit()
+    db.refresh(mapping)
+    return mapping
+
+
+def list_preference_category_mappings(
+    db: Session, preference_tag: PreferenceTag | None = None
+) -> list[PreferenceCategoryMapping]:
+    stmt = select(PreferenceCategoryMapping)
+    if preference_tag is not None:
+        stmt = stmt.where(PreferenceCategoryMapping.preference_tag == preference_tag)
+    return list(db.scalars(stmt).all())
+
+
+def get_preference_category_mapping(
+    db: Session, mapping_id: int
+) -> PreferenceCategoryMapping | None:
+    return db.get(PreferenceCategoryMapping, mapping_id)
+
+
+def delete_preference_category_mapping(db: Session, mapping: PreferenceCategoryMapping) -> None:
+    db.delete(mapping)
+    db.commit()
 
 
 def _select_candidate_facilities(
