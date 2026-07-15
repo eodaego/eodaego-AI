@@ -31,7 +31,14 @@ def _fetch_page(start: int, end: int) -> list[dict[str, Any]]:
     except requests.RequestException as exc:
         status = getattr(exc.response, "status_code", "unknown")
         raise RuntimeError(f"서울시 문화행사 API 호출 실패 (status={status})") from None
-    body = response.json().get("culturalEventInfo", {})
+    payload = response.json()
+    body = payload.get("culturalEventInfo")
+    if body is None:
+        result = payload.get("RESULT", {})
+        raise RuntimeError(
+            f"서울시 문화행사 API 오류 응답 (code={result.get('CODE', '알 수 없음')}, "
+            f"message={result.get('MESSAGE', '알 수 없음')})"
+        )
     rows = body.get("row", [])
     return rows if isinstance(rows, list) else [rows]
 
