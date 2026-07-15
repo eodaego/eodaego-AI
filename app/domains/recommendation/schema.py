@@ -8,6 +8,19 @@ PreferenceTag = Literal[
     "ANIMAL", "NATURE", "ACTIVITY", "PHOTO_SPOT", "RELAXATION", "CULTURE_EVENT", "LEARNING"
 ]
 CompanionType = Literal["ALONE", "WITH_CHILD", "WITH_PARTNER", "WITH_FRIENDS", "WITH_ELDERLY"]
+GateCode = Literal[
+    "MAIN_GATE",
+    "HOEGWAN_GATE",
+    "SOUTH_GATE",
+    "GUI_GATE",
+    "EAST_GATE_1",
+    "EAST_GATE_2",
+    "REAR_GATE",
+    "NORTH_GATE_1",
+    "NORTH_GATE_2",
+    "WEST_GATE",
+    "NEUNGDONG_GATE",
+]
 
 _PREFERENCE_TAGS_DESC = (
     "추천 동선에 반영할 취향 태그. 복수 선택 가능, 최소 1개 필요. 태그 → Facility.category "
@@ -19,6 +32,9 @@ _COMPANION_TYPE_DESC = (
     "동반자 유형. 단일 선택. ALONE(혼자 방문)/WITH_CHILD(아이와 함께)/"
     "WITH_PARTNER(연인과 함께)/WITH_FRIENDS(친구와 함께)/WITH_ELDERLY(어르신과 함께)."
 )
+_GATE_CODE_DESC = (
+    '서울어린이대공원 실제 출입구의 영문 코드. Facility(category="출입문").code와 매칭된다.'
+)
 
 
 class RecommendationRoutesRequest(BaseModel):
@@ -28,11 +44,11 @@ class RecommendationRoutesRequest(BaseModel):
         min_length=1,
     )
     stay_duration_minutes: int = Field(description="예상 체류 시간(분).", examples=[120], gt=0)
-    entrance_facility_id: int = Field(
-        description='입구로 사용할 Facility(category="출입문")의 PK.', examples=[27]
+    entrance_facility_code: GateCode = Field(
+        description=f"입구로 사용할 출입구 코드. {_GATE_CODE_DESC}", examples=["MAIN_GATE"]
     )
-    exit_facility_id: int = Field(
-        description='출구로 사용할 Facility(category="출입문")의 PK.', examples=[28]
+    exit_facility_code: GateCode = Field(
+        description=f"출구로 사용할 출입구 코드. {_GATE_CODE_DESC}", examples=["SOUTH_GATE"]
     )
     companion_type: CompanionType = Field(description=_COMPANION_TYPE_DESC, examples=["WITH_CHILD"])
 

@@ -10,7 +10,7 @@ from app.domains.ai.suh_aider_client import call_chat
 from app.domains.crawling.model import CongestionSnapshot
 from app.domains.crawling.service import list_congestion_snapshots
 from app.domains.facility.model import Facility
-from app.domains.facility.service import get_facility, list_facilities
+from app.domains.facility.service import get_facility_by_code, list_facilities
 from app.domains.prompt.service import get_active_prompt_template
 from app.domains.recommendation.model import PreferenceCategoryMapping
 from app.domains.recommendation.schema import (
@@ -82,15 +82,15 @@ def _select_candidate_facilities(
 
 
 def _get_entrance_exit_facilities(
-    db: Session, entrance_facility_id: int, exit_facility_id: int
+    db: Session, entrance_facility_code: str, exit_facility_code: str
 ) -> tuple[Facility, Facility]:
-    entrance = get_facility(db, entrance_facility_id)
+    entrance = get_facility_by_code(db, entrance_facility_code)
     if entrance is None or entrance.category != _ENTRANCE_CATEGORY:
-        detail = "entrance_facility_id가 유효한 출입구 Facility를 가리키지 않습니다"
+        detail = "entrance_facility_code가 유효한 출입구 Facility를 가리키지 않습니다"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
-    exit_facility = get_facility(db, exit_facility_id)
+    exit_facility = get_facility_by_code(db, exit_facility_code)
     if exit_facility is None or exit_facility.category != _ENTRANCE_CATEGORY:
-        detail = "exit_facility_id가 유효한 출입구 Facility를 가리키지 않습니다"
+        detail = "exit_facility_code가 유효한 출입구 Facility를 가리키지 않습니다"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     return entrance, exit_facility
 
@@ -200,7 +200,7 @@ def generate_recommendation(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
     entrance, exit_facility = _get_entrance_exit_facilities(
-        db, data.entrance_facility_id, data.exit_facility_id
+        db, data.entrance_facility_code, data.exit_facility_code
     )
 
     candidates = _select_candidate_facilities(db, data.preference_tags)
