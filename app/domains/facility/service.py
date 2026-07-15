@@ -41,6 +41,10 @@ def get_facility(db: Session, facility_id: int) -> Facility | None:
     return db.get(Facility, facility_id)
 
 
+def get_facility_by_code(db: Session, code: str) -> Facility | None:
+    return db.scalar(select(Facility).where(Facility.code == code))
+
+
 def update_facility(db: Session, facility: Facility, data: FacilityUpdate) -> Facility:
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(facility, field, value)

@@ -57,13 +57,27 @@ def list_facilities(
     response_model=FacilityResponse,
     status_code=status.HTTP_201_CREATED,
     summary="시설 생성 (관리자)",
-    responses=COMMON_ERRORS,
+    responses={
+        **COMMON_ERRORS,
+        409: error_response(
+            "CONFLICT",
+            "facility code already exists",
+            "code를 지정했고 그 값이 이미 다른 시설에 사용 중임(IntegrityError를 서버가 직접 "
+            "감지해 409로 매핑함). code를 생략하면(null) 이 충돌이 발생하지 않는다.",
+        ),
+    },
 )
 def create_facility(data: FacilityCreate, db: Session = Depends(get_db)) -> FacilityResponse:
     """관리자가 직접 시설을 등록한다. `external_id`는 공공데이터 크롤링 전용 필드라 이
-    경로로 생성하는 행에는 항상 null이 저장된다(요청 스키마에도 포함되지 않는다).
+    경로로 생성하는 행에는 항상 null이 저장된다(요청 스키마에도 포함되지 않는다). `code`가
+    이미 다른 시설에서 사용 중이면 409를 반환한다.
     """
-    facility = service.create_facility(db, data)
+    try:
+        facility = service.create_facility(db, data)
+    except IntegrityError:
+        db.rollback()
+        detail = "facility code already exists"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
     return FacilityResponse.model_validate(facility)
 
 
