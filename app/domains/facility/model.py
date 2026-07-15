@@ -10,7 +10,7 @@ class Facility(Base):
     __tablename__ = "facility"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    external_id: Mapped[int] = mapped_column(unique=True)
+    external_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
     category: Mapped[str] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(String(100))
     intro: Mapped[str | None] = mapped_column(Text, nullable=True)
