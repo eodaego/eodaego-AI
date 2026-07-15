@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 class CrawlResult(BaseModel):
     """수동 크롤링 트리거 API의 공통 응답 스키마.
 
-    congestion/operating_hours/weather 3개 job이 그대로 공유하고, catalog는 이를
+    congestion/operating_hours/weather/event 4개 job이 그대로 공유하고, catalog는 이를
     animals/plants/locations 3개 필드로 감싼 CatalogCrawlResult(catalog/schema.py)를
     별도로 쓴다.
     """
