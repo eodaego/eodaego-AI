@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.openapi import COMMON_ERRORS, error_response
@@ -6,6 +9,9 @@ from app.core.security import verify_internal_api_key
 from app.db.session import get_db
 from app.domains.recommendation import service
 from app.domains.recommendation.schema import (
+    PreferenceCategoryMappingCreate,
+    PreferenceCategoryMappingResponse,
+    PreferenceTag,
     RecommendationRoutesRequest,
     RecommendationRoutesResponse,
 )
@@ -14,6 +20,12 @@ router = APIRouter(
     prefix="/api/v1/recommendation",
     tags=["recommendation"],
     dependencies=[Depends(verify_internal_api_key)],
+)
+
+_MAPPING_NOT_FOUND_RESPONSE = error_response(
+    "NOT_FOUND",
+    "preference category mapping not found",
+    "path의 mapping_id에 해당하는 매핑이 없음",
 )
 
 
@@ -28,9 +40,10 @@ router = APIRouter(
             "선택한 선호 태그에 해당하는 추천 후보가 없습니다",
             "요청 스키마 자체가 잘못됐을 때(COMMON_ERRORS의 VALIDATION_ERROR)도 이 상태 코드가 "
             "나올 수 있다. 이 문서 예시는 스키마는 유효하지만 preference_tags에 매핑되는 "
-            "Facility 후보가 0건이거나(PHOTO_SPOT/CULTURE_EVENT/LEARNING만 선택한 경우 포함), "
-            'entrance_facility_id/exit_facility_id가 category="출입문"인 Facility를 가리키지 '
-            "않아 처리 불가능한 경우다",
+            "Facility 후보가 0건이거나(GET /api/v1/recommendation/preference-mappings로 조회 "
+            "가능한 매핑이 하나도 없는 태그만 선택한 경우 포함), entrance_facility_id/"
+            'exit_facility_id가 category="출입문"인 Facility를 가리키지 않아 처리 불가능한 '
+            "경우다",
         ),
         503: error_response(
             "SERVICE_UNAVAILABLE",
@@ -64,3 +77,66 @@ def create_route_recommendation(
     7. 5~6단계가 실패하면 1회 재시도하고, 그래도 실패하면 502.
     """
     return service.generate_recommendation(db, data)
+
+
+@router.post(
+    "/preference-mappings",
+    response_model=PreferenceCategoryMappingResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="취향 태그-시설 카테고리 매핑 생성 (관리자)",
+    responses={
+        **COMMON_ERRORS,
+        409: error_response(
+            "CONFLICT",
+            "preference category mapping already exists",
+            "동일한 (preference_tag, category) 조합이 이미 존재함",
+        ),
+    },
+)
+def create_preference_mapping(
+    data: PreferenceCategoryMappingCreate, db: Session = Depends(get_db)
+) -> PreferenceCategoryMappingResponse:
+    """관리자가 취향 태그-시설 카테고리 매핑을 등록한다. 동일한 (preference_tag, category)
+    조합이 이미 존재하면 409를 반환한다.
+    """
+    try:
+        mapping = service.create_preference_category_mapping(db, data)
+    except IntegrityError:
+        db.rollback()
+        detail = "preference category mapping already exists"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
+    return PreferenceCategoryMappingResponse.model_validate(mapping)
+
+
+@router.get(
+    "/preference-mappings",
+    response_model=list[PreferenceCategoryMappingResponse],
+    summary="취향 태그-시설 카테고리 매핑 전체 목록 조회",
+    responses=COMMON_ERRORS,
+)
+def list_preference_mappings(
+    preference_tag: Annotated[
+        PreferenceTag | None, Query(description="지정 시 해당 취향 태그의 매핑만 필터링.")
+    ] = None,
+    db: Session = Depends(get_db),
+) -> list[PreferenceCategoryMappingResponse]:
+    """정렬 조건 없이 전체 매핑을 반환한다. `preference_tag` 쿼리 파라미터를 지정하면
+    해당 태그의 매핑만 필터링한다.
+    """
+    mappings = service.list_preference_category_mappings(db, preference_tag=preference_tag)
+    return [PreferenceCategoryMappingResponse.model_validate(m) for m in mappings]
+
+
+@router.delete(
+    "/preference-mappings/{mapping_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="취향 태그-시설 카테고리 매핑 삭제",
+    responses={**COMMON_ERRORS, 404: _MAPPING_NOT_FOUND_RESPONSE},
+)
+def delete_preference_mapping(mapping_id: int, db: Session = Depends(get_db)) -> None:
+    """대상이 없으면 404."""
+    mapping = service.get_preference_category_mapping(db, mapping_id)
+    if mapping is None:
+        detail = "preference category mapping not found"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+    service.delete_preference_category_mapping(db, mapping)
