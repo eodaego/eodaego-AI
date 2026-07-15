@@ -28,7 +28,9 @@ router = APIRouter(
             "선택한 선호 태그에 해당하는 추천 후보가 없습니다",
             "요청 스키마 자체가 잘못됐을 때(COMMON_ERRORS의 VALIDATION_ERROR)도 이 상태 코드가 "
             "나올 수 있다. 이 문서 예시는 스키마는 유효하지만 preference_tags에 매핑되는 "
-            "Facility 후보가 0건이라 처리 불가능한 경우다",
+            "Facility 후보가 0건이거나(PHOTO_SPOT/CULTURE_EVENT/LEARNING만 선택한 경우 포함), "
+            'entrance_facility_id/exit_facility_id가 category="출입문"인 Facility를 가리키지 '
+            "않아 처리 불가능한 경우다",
         ),
         503: error_response(
             "SERVICE_UNAVAILABLE",
@@ -47,15 +49,18 @@ router = APIRouter(
 def create_route_recommendation(
     data: RecommendationRoutesRequest, db: Session = Depends(get_db)
 ) -> RecommendationRoutesResponse:
-    """사용자 입력(선호 태그·체류 시간·시작 위치·동반 아동 여부)만 받아, AI가 자체 보유한
+    """사용자 입력(선호 태그·체류 시간·입구/출구·동반자 유형)만 받아, AI가 자체 보유한
     Facility(시설 위치)·날씨·혼잡도 데이터를 조합해 추천 동선을 생성한다.
 
     **처리 순서**
     1. `purpose='recommendation'`이고 `is_active=true`인 프롬프트 템플릿을 조회한다. 없으면 503.
-    2. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다. 0건이면 422.
-    3. 최신 날씨 스냅샷과 공원 전체 혼잡도를 조회한다.
-    4. 프롬프트 템플릿에 후보·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다.
-    5. 응답을 구조화된 코스 목록으로 파싱/검증한다(존재하지 않는 facility_id 참조 시 실패로 간주).
-    6. 4~5단계가 실패하면 1회 재시도하고, 그래도 실패하면 502.
+    2. `entrance_facility_id`/`exit_facility_id`가 `category="출입문"`인 `Facility`를 가리키는지
+       검증한다. 아니면 422.
+    3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다. 0건이면 422.
+    4. 최신 날씨 스냅샷과 공원 전체 혼잡도를 조회한다.
+    5. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다.
+    6. 응답을 구조화된 코스 목록으로 파싱/검증한다(존재하지 않는 facility_id 참조 시 실패로
+       간주 — 입구/출구도 유효한 facility_id로 취급된다).
+    7. 5~6단계가 실패하면 1회 재시도하고, 그래도 실패하면 502.
     """
     return service.generate_recommendation(db, data)
