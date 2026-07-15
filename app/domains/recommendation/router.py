@@ -41,9 +41,9 @@ _MAPPING_NOT_FOUND_RESPONSE = error_response(
             "요청 스키마 자체가 잘못됐을 때(COMMON_ERRORS의 VALIDATION_ERROR)도 이 상태 코드가 "
             "나올 수 있다. 이 문서 예시는 스키마는 유효하지만 preference_tags에 매핑되는 "
             "Facility 후보가 0건이거나(GET /api/v1/recommendation/preference-mappings로 조회 "
-            "가능한 매핑이 하나도 없는 태그만 선택한 경우 포함), entrance_facility_id/"
-            'exit_facility_id가 category="출입문"인 Facility를 가리키지 않아 처리 불가능한 '
-            "경우다",
+            "가능한 매핑이 하나도 없는 태그만 선택한 경우 포함), entrance_facility_code/"
+            'exit_facility_code가 category="출입문"인 Facility.code와 일치하지 않아 처리 '
+            "불가능한 경우다",
         ),
         503: error_response(
             "SERVICE_UNAVAILABLE",
@@ -67,8 +67,8 @@ def create_route_recommendation(
 
     **처리 순서**
     1. `purpose='recommendation'`이고 `is_active=true`인 프롬프트 템플릿을 조회한다. 없으면 503.
-    2. `entrance_facility_id`/`exit_facility_id`가 `category="출입문"`인 `Facility`를 가리키는지
-       검증한다. 아니면 422.
+    2. `entrance_facility_code`/`exit_facility_code`가 `category="출입문"`인 `Facility.code`와
+       일치하는지 검증한다. 아니면 422.
     3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다. 0건이면 422.
     4. 최신 날씨 스냅샷과 공원 전체 혼잡도를 조회한다.
     5. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다.

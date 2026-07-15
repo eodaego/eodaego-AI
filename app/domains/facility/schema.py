@@ -15,6 +15,10 @@ class FacilityResponse(BaseModel):
     )
     category: str = Field(description="시설 분류 (원본 데이터 값 그대로)")
     name: str = Field(description="시설 이름")
+    code: str | None = Field(
+        description="안정적인 영문 식별 코드(예: 출입문의 MAIN_GATE). BE 등 외부 시스템이 "
+        "name 대신 참조할 수 있는 값이며, 코드가 없는 시설은 null이다."
+    )
     intro: str | None = Field(description="간단 소개. 없으면 null.")
     description: str | None = Field(description="상세 설명. 없으면 null.")
     latitude: float | None = Field(description="위도. 좌표 정보가 없는 시설은 null.")
@@ -99,6 +103,12 @@ class FacilityCreate(BaseModel):
         description="시설 분류.", examples=["출입문"], min_length=1, max_length=50
     )
     name: str = Field(description="시설 이름.", examples=["정문"], min_length=1, max_length=100)
+    code: str | None = Field(
+        default=None,
+        description="안정적인 영문 식별 코드. 생략 시 null.",
+        examples=["MAIN_GATE"],
+        max_length=50,
+    )
     intro: str | None = Field(default=None, description="간단 소개. 생략 시 null.")
     description: str | None = Field(default=None, description="상세 설명. 생략 시 null.")
     latitude: float | None = Field(default=None, description="위도. 생략 시 null.")
@@ -122,6 +132,9 @@ class FacilityUpdate(BaseModel):
         "422(DB NOT NULL 제약 반영).",
         min_length=1,
         max_length=100,
+    )
+    code: str | None = Field(
+        default=None, description="안정적인 영문 식별 코드. 생략 시 기존 값 유지.", max_length=50
     )
     intro: str | None = Field(default=None, description="간단 소개. 생략 시 기존 값 유지.")
     description: str | None = Field(default=None, description="상세 설명. 생략 시 기존 값 유지.")
