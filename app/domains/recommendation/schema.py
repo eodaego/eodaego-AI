@@ -55,9 +55,11 @@ class RecommendationRoutesResponse(BaseModel):
 
 
 class PreferenceCategoryMappingCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     preference_tag: PreferenceTag = Field(description="매핑할 취향 태그.", examples=["ANIMAL"])
     category: str = Field(
-        description="매핑할 Facility.category 값.",
+        description="매핑할 Facility.category 값. 앞뒤 공백은 자동으로 제거된다.",
         examples=["동물나라"],
         min_length=1,
         max_length=50,
@@ -68,6 +70,9 @@ class PreferenceCategoryMappingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="매핑 PK")
-    preference_tag: PreferenceTag = Field(description="매핑된 취향 태그")
+    preference_tag: str = Field(
+        description="매핑된 취향 태그. 생성 시(POST)에는 PreferenceTag 7종으로 제한되지만, 이 "
+        "응답 필드는 DB에 남아있을 수 있는 값을 안전하게 직렬화하기 위해 str로 완화되어 있다."
+    )
     category: str = Field(description="매핑된 Facility.category 값")
     updated_at: KstDatetime = Field(description="마지막 수정 시각 (KST)")
