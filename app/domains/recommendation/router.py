@@ -63,15 +63,18 @@ def create_route_recommendation(
     data: RecommendationRoutesRequest, db: Session = Depends(get_db)
 ) -> RecommendationRoutesResponse:
     """사용자 입력(선호 태그·체류 시간·입구/출구·동반자 유형)만 받아, AI가 자체 보유한
-    Facility(시설 위치)·날씨·혼잡도 데이터를 조합해 추천 동선을 생성한다.
+    Facility(시설 위치)·날씨·혼잡도 데이터를 조합해 추천 동선을 생성한다. 입구/출구를 제외한
+    선호 태그·체류 시간·동반자 유형은 선택 사항이다(생략 시 해당 조건 없이 추천).
 
     **처리 순서**
     1. `purpose='recommendation'`이고 `is_active=true`인 프롬프트 템플릿을 조회한다. 없으면 503.
     2. `entrance_facility_code`/`exit_facility_code`가 `category="출입문"`인 `Facility.code`와
        일치하는지 검증한다. 아니면 422.
-    3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다. 0건이면 422.
+    3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다. 선택하지 않았거나
+       빈 배열이면 매핑된 모든 카테고리를 대상으로 조회한다. 0건이면 422.
     4. 최신 날씨 스냅샷과 공원 전체 혼잡도를 조회한다.
-    5. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다.
+    5. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다
+       (선택하지 않은 항목은 치환 변수에서 생략된다).
     6. 응답을 구조화된 코스 목록으로 파싱/검증한다(존재하지 않는 facility_id 참조 시 실패로
        간주 — 입구/출구도 유효한 facility_id로 취급된다).
     7. 5~6단계가 실패하면 1회 재시도하고, 그래도 실패하면 502.
