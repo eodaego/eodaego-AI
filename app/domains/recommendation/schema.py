@@ -23,14 +23,17 @@ GateCode = Literal[
 ]
 
 _PREFERENCE_TAGS_DESC = (
-    "추천 동선에 반영할 취향 태그. 복수 선택 가능, 최소 1개 필요. 태그 → Facility.category "
-    "매핑은 관리자가 GET/POST/DELETE /api/v1/recommendation/preference-mappings로 직접 "
-    "관리하며(초기 데이터는 ANIMAL/NATURE/ACTIVITY/RELAXATION만 매핑되어 있다), 매핑이 하나도 "
-    "없는 태그만 선택하면 추천 후보 0건(422)이 될 수 있다."
+    "추천 동선에 반영할 취향 태그. 복수 선택 가능, 선택하지 않거나(생략) 빈 배열이면 매핑된 "
+    "모든 카테고리를 후보로 사용해 폭넓게 추천한다. 태그 → Facility.category 매핑은 관리자가 "
+    "GET/POST/DELETE /api/v1/recommendation/preference-mappings로 직접 관리하며(초기 데이터는 "
+    "ANIMAL/NATURE/ACTIVITY/RELAXATION만 매핑되어 있다), 매핑 테이블 자체가 비어 있으면 추천 "
+    "후보 0건(422)이 될 수 있다."
 )
+_STAY_DURATION_MINUTES_DESC = "예상 체류 시간(분). 선택하지 않으면 프롬프트에서 이 조건이 생략된다."
 _COMPANION_TYPE_DESC = (
     "동반자 유형. 단일 선택. ALONE(혼자 방문)/WITH_CHILD(아이와 함께)/"
-    "WITH_PARTNER(연인과 함께)/WITH_FRIENDS(친구와 함께)/WITH_ELDERLY(어르신과 함께)."
+    "WITH_PARTNER(연인과 함께)/WITH_FRIENDS(친구와 함께)/WITH_ELDERLY(어르신과 함께). "
+    "선택하지 않으면 프롬프트에서 이 조건이 생략된다."
 )
 _GATE_CODE_DESC = (
     '서울어린이대공원 실제 출입구의 영문 코드. Facility(category="출입문").code와 매칭된다.'
@@ -38,19 +41,23 @@ _GATE_CODE_DESC = (
 
 
 class RecommendationRoutesRequest(BaseModel):
-    preference_tags: list[PreferenceTag] = Field(
+    preference_tags: list[PreferenceTag] | None = Field(
+        default=None,
         description=_PREFERENCE_TAGS_DESC,
         examples=[["ANIMAL", "ACTIVITY"]],
-        min_length=1,
     )
-    stay_duration_minutes: int = Field(description="예상 체류 시간(분).", examples=[120], gt=0)
+    stay_duration_minutes: int | None = Field(
+        default=None, description=_STAY_DURATION_MINUTES_DESC, examples=[120], gt=0
+    )
     entrance_facility_code: GateCode = Field(
         description=f"입구로 사용할 출입구 코드. {_GATE_CODE_DESC}", examples=["MAIN_GATE"]
     )
     exit_facility_code: GateCode = Field(
         description=f"출구로 사용할 출입구 코드. {_GATE_CODE_DESC}", examples=["SOUTH_GATE"]
     )
-    companion_type: CompanionType = Field(description=_COMPANION_TYPE_DESC, examples=["WITH_CHILD"])
+    companion_type: CompanionType | None = Field(
+        default=None, description=_COMPANION_TYPE_DESC, examples=["WITH_CHILD"]
+    )
 
 
 class RouteStop(BaseModel):
