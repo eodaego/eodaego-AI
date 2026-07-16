@@ -72,11 +72,11 @@ def delete_preference_category_mapping(db: Session, mapping: PreferenceCategoryM
 
 
 def _select_candidate_facilities(
-    db: Session, preference_tags: list[PreferenceTag]
+    db: Session, preference_tags: list[PreferenceTag] | None
 ) -> list[Facility]:
-    stmt = select(PreferenceCategoryMapping.category).where(
-        PreferenceCategoryMapping.preference_tag.in_(preference_tags)
-    )
+    stmt = select(PreferenceCategoryMapping.category)
+    if preference_tags:
+        stmt = stmt.where(PreferenceCategoryMapping.preference_tag.in_(preference_tags))
     target_categories = set(db.scalars(stmt).all())
     return [f for f in list_facilities(db) if f.category in target_categories]
 
@@ -128,16 +128,22 @@ def _build_prompt_variables(
         if congestion is not None
         else "혼잡도 정보 없음"
     )
-    return {
+    variables = {
         "candidates": candidates_text,
         "weather": weather_text,
         "congestion": congestion_text,
-        "preference_tags": ", ".join(data.preference_tags),
-        "stay_duration_minutes": str(data.stay_duration_minutes),
         "entrance": _format_facility_candidate(entrance),
         "exit": _format_facility_candidate(exit_facility),
-        "companion_type": _COMPANION_TYPE_HINTS[data.companion_type],
     }
+    # 사용자가 선택하지 않은 항목은 프롬프트 변수 자체를 생략한다(safe_substitute는 매핑에
+    # 없는 자리표시자를 에러 없이 그대로 남기므로, 빈 문자열 등 임의 기본값을 넣지 않는다).
+    if data.preference_tags:
+        variables["preference_tags"] = ", ".join(data.preference_tags)
+    if data.stay_duration_minutes is not None:
+        variables["stay_duration_minutes"] = str(data.stay_duration_minutes)
+    if data.companion_type is not None:
+        variables["companion_type"] = _COMPANION_TYPE_HINTS[data.companion_type]
+    return variables
 
 
 def _strip_markdown_fences(text: str) -> str:
