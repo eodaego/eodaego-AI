@@ -84,7 +84,8 @@ class LlmCourse(BaseModel):
     title: str = Field(description="코스 제목.")
     reason: str = Field(description="이 코스를 추천하는 이유.")
     facility_ids: list[int] = Field(
-        description="입구/출구를 제외한 중간 방문지 facility_id 목록(순서 무관)."
+        description="입구/출구를 제외한 중간 방문지 facility_id 목록(순서 무관).",
+        max_length=20,
     )
 
 

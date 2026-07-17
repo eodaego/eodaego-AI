@@ -82,10 +82,16 @@ def _select_candidate_facilities(
         stmt = stmt.where(PreferenceCategoryMapping.preference_tag.in_(preference_tags))
     target_categories = set(db.scalars(stmt).all())
     # 좌표 없는 시설은 경로 최적화 알고리즘이 다룰 수 없으므로 후보 단계에서 제외한다.
+    # 출입문 카테고리가 실수로 매핑되더라도 게이트가 중간 방문지 후보로 섞이지 않도록 제외한다
+    # (입구/출구는 이미 별도 필드로 고정되므로, 섞이면 요청마다 입구/출구 누출 검증 실패가
+    # 반복될 수 있다).
     return [
         f
         for f in list_facilities(db)
-        if f.category in target_categories and f.latitude is not None and f.longitude is not None
+        if f.category in target_categories
+        and f.category != _ENTRANCE_CATEGORY
+        and f.latitude is not None
+        and f.longitude is not None
     ]
 
 
@@ -110,11 +116,7 @@ def _get_entrance_exit_facilities(
 
 
 def _format_facility_candidate(facility: Facility) -> str:
-    location = (
-        f"({facility.latitude}, {facility.longitude})"
-        if facility.latitude is not None and facility.longitude is not None
-        else "위치 정보 없음"
-    )
+    location = f"({facility.latitude}, {facility.longitude})"
     description = (facility.intro or facility.description or "")[:_MAX_DESCRIPTION_LENGTH_IN_PROMPT]
     return (
         f"- id={facility.id}, name={facility.name}, category={facility.category}, "
