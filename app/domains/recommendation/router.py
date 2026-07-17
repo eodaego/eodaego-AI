@@ -41,9 +41,10 @@ _MAPPING_NOT_FOUND_RESPONSE = error_response(
             "요청 스키마 자체가 잘못됐을 때(COMMON_ERRORS의 VALIDATION_ERROR)도 이 상태 코드가 "
             "나올 수 있다. 이 문서 예시는 스키마는 유효하지만 preference_tags에 매핑되는 "
             "Facility 후보가 0건이거나(GET /api/v1/recommendation/preference-mappings로 조회 "
-            "가능한 매핑이 하나도 없는 태그만 선택한 경우 포함), entrance_facility_code/"
-            'exit_facility_code가 category="출입문"인 Facility.code와 일치하지 않아 처리 '
-            "불가능한 경우다",
+            "가능한 매핑이 하나도 없는 태그만 선택했거나, 매핑된 시설 전부에 좌표 정보가 없는 "
+            '경우 포함), entrance_facility_code/exit_facility_code가 category="출입문"인 '
+            "Facility.code와 일치하지 않거나 해당 Facility에 좌표 정보가 없어 처리 불가능한 "
+            "경우다",
         ),
         503: error_response(
             "SERVICE_UNAVAILABLE",
@@ -69,14 +70,18 @@ def create_route_recommendation(
     **처리 순서**
     1. `purpose='recommendation'`이고 `is_active=true`인 프롬프트 템플릿을 조회한다. 없으면 503.
     2. `entrance_facility_code`/`exit_facility_code`가 `category="출입문"`인 `Facility.code`와
-       일치하는지 검증한다. 아니면 422.
-    3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다. 선택하지 않았거나
-       빈 배열이면 매핑된 모든 카테고리를 대상으로 조회한다. 0건이면 422.
+       일치하고 좌표 정보를 가지고 있는지 검증한다. 아니면 422.
+    3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다(좌표가 없는 시설은
+       후보에서 제외된다). 선택하지 않았거나 빈 배열이면 매핑된 모든 카테고리를 대상으로
+       조회한다. 0건이면 422.
     4. 최신 날씨 스냅샷과 공원 전체 혼잡도를 조회한다.
     5. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다
-       (선택하지 않은 항목은 치환 변수에서 생략된다).
-    6. 응답을 구조화된 코스 목록으로 파싱/검증한다(존재하지 않는 facility_id 참조 시 실패로
-       간주 — 입구/출구도 유효한 facility_id로 취급된다).
+       (선택하지 않은 항목은 치환 변수에서 생략된다). LLM은 각 코스마다 입구/출구를 제외한
+       중간 방문지 facility_id만 결정한다.
+    6. 응답을 파싱/검증한다(존재하지 않거나 입구/출구인 facility_id를 중간 방문지로 잘못
+       포함시켰거나, 한 코스 안에서 facility_id가 중복된 경우 실패로 간주). 실제 방문 순서는
+       LLM이 아니라, 입구/출구 좌표를 고정하고 중간 방문지 간 직선거리 합을 최소화하는 서버
+       알고리즘(최근접 이웃+2-opt)이 계산한다.
     7. 5~6단계가 실패하면 1회 재시도하고, 그래도 실패하면 502.
     """
     return service.generate_recommendation(db, data)
