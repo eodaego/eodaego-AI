@@ -77,6 +77,21 @@ class RecommendationRoutesResponse(BaseModel):
     courses: list[RecommendedCourse] = Field(description="추천 코스 목록.")
 
 
+# LLM 원시 응답 파싱 전용 내부 스키마 — 공개 응답 스키마(RouteStop/RecommendedCourse)와 달리
+# 입구/출구를 제외한 중간 방문지 facility_id만 순서 무관하게 담는다. 실제 방문 순서는
+# route_optimizer.optimize_route()가 좌표 기반으로 계산한 뒤 서비스가 조립한다.
+class LlmCourse(BaseModel):
+    title: str = Field(description="코스 제목.")
+    reason: str = Field(description="이 코스를 추천하는 이유.")
+    facility_ids: list[int] = Field(
+        description="입구/출구를 제외한 중간 방문지 facility_id 목록(순서 무관)."
+    )
+
+
+class LlmRecommendationResponse(BaseModel):
+    courses: list[LlmCourse] = Field(description="LLM이 구성한 코스 목록(방문 순서 미포함).")
+
+
 class PreferenceCategoryMappingCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
