@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+import openpyxl
 import requests
 from bs4 import BeautifulSoup
 from sqlalchemy import delete, select
@@ -20,6 +21,8 @@ from app.domains.facility.schema import (
 logger = logging.getLogger(__name__)
 
 USE_JSP_URL = "https://www.sisul.or.kr/open_content/childrenpark/introduce/use.jsp"
+_FACILITY_LOCATIONS_XLSX_PATH = "data/seoul_childrens_grand_park_facility_locations.xlsx"
+_FACILITY_LOCATIONS_SHEET_NAME = "위치정보 작성"
 
 
 def list_facilities(db: Session, category: str | None = None) -> list[Facility]:
@@ -139,3 +142,51 @@ def update_amusement_ride(
 def delete_amusement_ride(db: Session, ride: AmusementRide) -> None:
     db.delete(ride)
     db.commit()
+
+
+def import_facility_locations(db: Session) -> CrawlResult:
+    """공식 xlsx(`data/seoul_childrens_grand_park_facility_locations.xlsx`)의 시설
+    위치정보를 `external_id` 기준으로 upsert한다. 여러 번 호출해도 안전하다(멱등).
+    """
+    try:
+        workbook = openpyxl.load_workbook(_FACILITY_LOCATIONS_XLSX_PATH, data_only=True)
+        sheet = workbook[_FACILITY_LOCATIONS_SHEET_NAME]
+    except Exception:
+        logger.warning("시설 위치정보 xlsx 로드 실패", exc_info=True)
+        return CrawlResult(
+            success=False, collected_count=0, message="시설 위치정보 xlsx 로드 실패"
+        )
+
+    imported = 0
+    try:
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            external_id, category, name, intro, description, latitude, longitude, facility_type = (
+                row
+            )
+            if external_id is None or name is None:
+                continue
+            existing = db.scalar(select(Facility).where(Facility.external_id == int(external_id)))
+            values = {
+                "category": str(category),
+                "name": str(name),
+                "intro": intro,
+                "description": description,
+                "latitude": float(latitude) if latitude is not None else None,
+                "longitude": float(longitude) if longitude is not None else None,
+                "facility_type": facility_type,
+            }
+            if existing is None:
+                db.add(Facility(external_id=int(external_id), **values))
+            else:
+                for field, value in values.items():
+                    setattr(existing, field, value)
+            imported += 1
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("시설 위치정보 임포트 실패", exc_info=True)
+        return CrawlResult(
+            success=False, collected_count=0, message="시설 위치정보 임포트 실패"
+        )
+
+    return CrawlResult(success=True, collected_count=imported)
