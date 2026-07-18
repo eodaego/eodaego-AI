@@ -13,12 +13,15 @@ from app.domains.facility.model import Facility
 from app.domains.facility.service import get_facility_by_code, list_facilities
 from app.domains.prompt.service import get_active_prompt_template
 from app.domains.recommendation.model import PreferenceCategoryMapping
+from app.domains.recommendation.route_optimizer import optimize_route
 from app.domains.recommendation.schema import (
     CompanionType,
+    LlmRecommendationResponse,
     PreferenceCategoryMappingCreate,
     PreferenceTag,
     RecommendationRoutesRequest,
     RecommendationRoutesResponse,
+    RecommendedCourse,
     RouteStop,
 )
 from app.domains.weather.model import WeatherSnapshot
@@ -78,7 +81,18 @@ def _select_candidate_facilities(
     if preference_tags:
         stmt = stmt.where(PreferenceCategoryMapping.preference_tag.in_(preference_tags))
     target_categories = set(db.scalars(stmt).all())
-    return [f for f in list_facilities(db) if f.category in target_categories]
+    # 좌표 없는 시설은 경로 최적화 알고리즘이 다룰 수 없으므로 후보 단계에서 제외한다.
+    # 출입문 카테고리가 실수로 매핑되더라도 게이트가 중간 방문지 후보로 섞이지 않도록 제외한다
+    # (입구/출구는 이미 별도 필드로 고정되므로, 섞이면 요청마다 입구/출구 누출 검증 실패가
+    # 반복될 수 있다).
+    return [
+        f
+        for f in list_facilities(db)
+        if f.category in target_categories
+        and f.category != _ENTRANCE_CATEGORY
+        and f.latitude is not None
+        and f.longitude is not None
+    ]
 
 
 def _get_entrance_exit_facilities(
@@ -92,15 +106,17 @@ def _get_entrance_exit_facilities(
     if exit_facility is None or exit_facility.category != _ENTRANCE_CATEGORY:
         detail = "exit_facility_code가 유효한 출입구 Facility를 가리키지 않습니다"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    if entrance.latitude is None or entrance.longitude is None:
+        detail = "entrance_facility_code에 해당하는 Facility에 좌표 정보가 없습니다"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    if exit_facility.latitude is None or exit_facility.longitude is None:
+        detail = "exit_facility_code에 해당하는 Facility에 좌표 정보가 없습니다"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     return entrance, exit_facility
 
 
 def _format_facility_candidate(facility: Facility) -> str:
-    location = (
-        f"({facility.latitude}, {facility.longitude})"
-        if facility.latitude is not None and facility.longitude is not None
-        else "위치 정보 없음"
-    )
+    location = f"({facility.latitude}, {facility.longitude})"
     description = (facility.intro or facility.description or "")[:_MAX_DESCRIPTION_LENGTH_IN_PROMPT]
     return (
         f"- id={facility.id}, name={facility.name}, category={facility.category}, "
@@ -158,43 +174,65 @@ def _strip_markdown_fences(text: str) -> str:
     return "\n".join(lines)
 
 
-def _validate_course_stops(stops: list[RouteStop], entrance_id: int, exit_facility_id: int) -> None:
-    if not stops:
-        raise RuntimeError("LLM 응답 코스의 stops가 비어있음")
-    if stops[0].facility_id != entrance_id:
-        raise RuntimeError(
-            f"LLM 응답 코스의 첫 정류지가 입구(id={entrance_id})가 아님: {stops[0].facility_id}"
-        )
-    if stops[-1].facility_id != exit_facility_id:
-        raise RuntimeError(
-            f"LLM 응답 코스의 마지막 정류지가 출구(id={exit_facility_id})가 아님: "
-            f"{stops[-1].facility_id}"
-        )
-    expected_orders = list(range(1, len(stops) + 1))
-    actual_orders = [stop.order for stop in stops]
-    if actual_orders != expected_orders:
-        raise RuntimeError(f"LLM 응답 코스의 order가 1부터 연속하지 않음: {actual_orders}")
+def _require_coordinates(facility: Facility) -> tuple[float, float]:
+    """좌표가 보장돼야 하는 지점에서 float | None을 좁혀 mypy strict를 통과시킨다."""
+    latitude, longitude = facility.latitude, facility.longitude
+    if latitude is None or longitude is None:
+        raise RuntimeError(f"좌표 없는 시설이 처리 과정에 포함됨: facility_id={facility.id}")
+    return latitude, longitude
 
 
 def _parse_llm_response(
-    content: str, valid_facility_ids: set[int], entrance_id: int, exit_facility_id: int
+    content: str,
+    valid_facility_ids: set[int],
+    entrance: Facility,
+    exit_facility: Facility,
+    facilities_by_id: dict[int, Facility],
 ) -> RecommendationRoutesResponse:
     try:
-        parsed = RecommendationRoutesResponse.model_validate_json(_strip_markdown_fences(content))
+        parsed = LlmRecommendationResponse.model_validate_json(_strip_markdown_fences(content))
     except ValidationError as exc:
         logger.warning("LLM 응답 파싱 실패", exc_info=True)
         raise RuntimeError(f"LLM 응답 파싱 실패: {exc}") from exc
-    for course in parsed.courses:
-        for stop in course.stops:
-            if stop.facility_id not in valid_facility_ids:
+
+    entrance_point = _require_coordinates(entrance)
+    exit_point = _require_coordinates(exit_facility)
+
+    courses: list[RecommendedCourse] = []
+    for llm_course in parsed.courses:
+        if len(set(llm_course.facility_ids)) != len(llm_course.facility_ids):
+            logger.warning(
+                "LLM 응답의 코스에 중복된 facility_id가 포함됨: %s", llm_course.facility_ids
+            )
+            raise RuntimeError(
+                f"LLM 응답의 코스에 중복된 facility_id가 포함됨: {llm_course.facility_ids}"
+            )
+        for facility_id in llm_course.facility_ids:
+            if facility_id in (entrance.id, exit_facility.id):
                 logger.warning(
-                    "LLM 응답에 존재하지 않는 facility_id가 포함됨: %s", stop.facility_id
+                    "LLM 응답에 입구/출구 facility_id가 중간 방문지로 포함됨: %s", facility_id
                 )
                 raise RuntimeError(
-                    f"LLM 응답에 존재하지 않는 facility_id가 포함됨: {stop.facility_id}"
+                    f"LLM 응답에 입구/출구 facility_id가 중간 방문지로 포함됨: {facility_id}"
                 )
-        _validate_course_stops(course.stops, entrance_id, exit_facility_id)
-    return parsed
+            if facility_id not in valid_facility_ids:
+                logger.warning("LLM 응답에 존재하지 않는 facility_id가 포함됨: %s", facility_id)
+                raise RuntimeError(f"LLM 응답에 존재하지 않는 facility_id가 포함됨: {facility_id}")
+
+        waypoints = [
+            (facility_id, *_require_coordinates(facilities_by_id[facility_id]))
+            for facility_id in llm_course.facility_ids
+        ]
+        ordered_ids = optimize_route(start=entrance_point, end=exit_point, waypoints=waypoints)
+        stop_ids = [entrance.id, *ordered_ids, exit_facility.id]
+        stops = [
+            RouteStop(facility_id=facility_id, order=order)
+            for order, facility_id in enumerate(stop_ids, start=1)
+        ]
+        courses.append(
+            RecommendedCourse(title=llm_course.title, reason=llm_course.reason, stops=stops)
+        )
+    return RecommendationRoutesResponse(courses=courses)
 
 
 def generate_recommendation(
@@ -236,16 +274,16 @@ def generate_recommendation(
         )
     system_content = template.safe_substitute(variables)
     messages = [{"role": "system", "content": system_content}]
-    valid_facility_ids = {facility.id for facility in candidates} | {
-        entrance.id,
-        exit_facility.id,
-    }
+    facilities_by_id = {facility.id: facility for facility in candidates}
+    valid_facility_ids = set(facilities_by_id.keys())
 
     last_error = RuntimeError("추천 생성 실패")
     for _ in range(_MAX_ATTEMPTS):
         try:
             content = call_chat(model=prompt.model, messages=messages)
-            return _parse_llm_response(content, valid_facility_ids, entrance.id, exit_facility.id)
+            return _parse_llm_response(
+                content, valid_facility_ids, entrance, exit_facility, facilities_by_id
+            )
         except RuntimeError as exc:
             last_error = exc
     raise HTTPException(
