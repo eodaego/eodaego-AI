@@ -156,6 +156,22 @@ def trigger_operating_hours_crawl() -> CrawlResult:
 
 
 @router.post(
+    "/import",
+    response_model=CrawlResult,
+    summary="시설 위치정보 xlsx 즉시 임포트",
+    responses=COMMON_ERRORS,
+)
+def trigger_facility_locations_import(db: Session = Depends(get_db)) -> CrawlResult:
+    """공식 xlsx(`data/seoul_childrens_grand_park_facility_locations.xlsx`)를 읽어
+    `external_id` 기준으로 upsert한다. 로컬 개발 환경에서 `alembic upgrade head` 이후
+    이 엔드포인트를 한 번 호출하면 prod와 동일한 시설 위치정보를 반영할 수 있다. 이미
+    존재하는 시설(`external_id` 기준)은 중복 추가되지 않고 값만 갱신된다. 관리자가
+    `POST /api/v1/facility`로 직접 등록한 시설(`external_id=null`)에는 영향을 주지 않는다.
+    """
+    return service.import_facility_locations(db)
+
+
+@router.post(
     "/amusement-rides",
     response_model=AmusementRideResponse,
     status_code=status.HTTP_201_CREATED,
