@@ -27,6 +27,7 @@ _PREFERENCE_TAG_CATEGORIES: dict[PreferenceTag, tuple[str, ...]] = {
     "ANIMAL_FRIENDLY": ("동물나라",),
     "PLANT_FRIENDLY": ("자연나라", "조경시설"),
     "ACTIVITY": ("재미나라", "체험시설", "운동 및 대관시설"),
+    "LEARNING": ("동물나라", "자연나라"),
 }
 
 
