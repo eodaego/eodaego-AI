@@ -20,6 +20,7 @@ def main() -> None:
         print(f"시설물 위치정보 임포트 완료: {result.collected_count}건")
     else:
         print(f"시설물 위치정보 임포트 실패: {result.message}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
