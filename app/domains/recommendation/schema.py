@@ -26,8 +26,8 @@ _PREFERENCE_TAGS_DESC = (
     "추천 동선에 반영할 취향 태그. 복수 선택 가능, 선택하지 않거나(생략) 빈 배열이면 매핑된 "
     "모든 카테고리를 후보로 사용해 폭넓게 추천한다. 태그 → Facility.category 매핑은 관리자가 "
     "GET/POST/DELETE /api/v1/recommendation/preference-mappings로 직접 관리하며(초기 데이터는 "
-    "ANIMAL/NATURE/ACTIVITY/RELAXATION만 매핑되어 있다), 매핑 테이블 자체가 비어 있으면 추천 "
-    "후보 0건(422)이 될 수 있다."
+    "ANIMAL/NATURE/ACTIVITY/RELAXATION/LEARNING만 매핑되어 있다), 매핑 테이블 자체가 비어 "
+    "있으면 추천 후보 0건(422)이 될 수 있다."
 )
 _STAY_DURATION_MINUTES_DESC = "예상 체류 시간(분). 선택하지 않으면 프롬프트에서 이 조건이 생략된다."
 _COMPANION_TYPE_DESC = (
