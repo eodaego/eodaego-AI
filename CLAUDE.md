@@ -22,6 +22,7 @@ Project rules live in `.claude/rules/*.md` — read those for team conventions, 
 - Create migration: `uv run alembic revision --autogenerate -m "message"` (review the generated file before applying — autogenerate misses index/type details)
 - Apply migration: `uv run alembic upgrade head`
 - Build image: `docker build -t eodaego-ai .`
+- Seed facility location data locally: after `alembic upgrade head`, call `POST /api/v1/facility/import` (or `uv run python -m scripts.import_facility_locations`) to upsert the official xlsx (`data/seoul_childrens_grand_park_facility_locations.xlsx`) by `external_id` — safe to re-run, matches what prod already has.
 
 No test suite exists — this repo does not write test code (decided 2026-07-09, mirrors `eodaego-server`'s policy). Verify changes via `ruff`/`mypy` and manual checks against `/docs` (Swagger) or `curl`.
 
