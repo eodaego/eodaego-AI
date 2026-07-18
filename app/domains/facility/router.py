@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,9 @@ from app.domains.facility.schema import (
     AmusementRideCreate,
     AmusementRideResponse,
     AmusementRideUpdate,
+    FacilityCreate,
     FacilityResponse,
+    FacilityUpdate,
     OperatingHoursSectionResponse,
 )
 
@@ -27,18 +29,91 @@ _RIDE_NOT_FOUND_RESPONSE = error_response(
 )
 
 
+_FACILITY_NOT_FOUND_RESPONSE = error_response(
+    "NOT_FOUND", "facility not found", "path의 facility_id에 해당하는 시설이 없음"
+)
+
+
 @router.get(
     "",
     response_model=list[FacilityResponse],
     summary="시설 전체 목록 조회",
     responses=COMMON_ERRORS,
 )
-def list_facilities(db: Session = Depends(get_db)) -> list[FacilityResponse]:
-    """공식 데이터 기반 시설 정보를 반환한다. **주의:** 현재 코드베이스에는 `facility` 테이블을
-    채우는 크롤링/등록 로직이 없다 — 이 API는 조회만 제공하며, 데이터가 비어 있을 수 있다.
+def list_facilities(
+    category: str | None = Query(default=None, description="지정 시 해당 category만 필터링."),
+    db: Session = Depends(get_db),
+) -> list[FacilityResponse]:
+    """시설 정보를 반환한다. `category` 쿼리 파라미터를 지정하면 해당 분류만 필터링한다.
+    공식 데이터로 채워진 기존 시설(`scripts/import_facility_locations.py`로 1회성 임포트됨) 외에,
+    관리자가 `POST /api/v1/facility`로 직접 등록한 시설(예: `category="출입문"`)도 포함된다.
     """
-    facilities = service.list_facilities(db)
+    facilities = service.list_facilities(db, category=category)
     return [FacilityResponse.model_validate(f) for f in facilities]
+
+
+@router.post(
+    "",
+    response_model=FacilityResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="시설 생성 (관리자)",
+    responses={
+        **COMMON_ERRORS,
+        409: error_response(
+            "CONFLICT",
+            "facility code already exists",
+            "code를 지정했고 그 값이 이미 다른 시설에 사용 중임(IntegrityError를 서버가 직접 "
+            "감지해 409로 매핑함). code를 생략하면(null) 이 충돌이 발생하지 않는다.",
+        ),
+    },
+)
+def create_facility(data: FacilityCreate, db: Session = Depends(get_db)) -> FacilityResponse:
+    """관리자가 직접 시설을 등록한다. `external_id`는 공공데이터 크롤링 전용 필드라 이
+    경로로 생성하는 행에는 항상 null이 저장된다(요청 스키마에도 포함되지 않는다). `code`가
+    이미 다른 시설에서 사용 중이면 409를 반환한다.
+    """
+    try:
+        facility = service.create_facility(db, data)
+    except IntegrityError:
+        db.rollback()
+        detail = "facility code already exists"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
+    return FacilityResponse.model_validate(facility)
+
+
+@router.patch(
+    "/{facility_id}",
+    response_model=FacilityResponse,
+    summary="시설 부분 수정",
+    responses={**COMMON_ERRORS, 404: _FACILITY_NOT_FOUND_RESPONSE},
+)
+def update_facility(
+    facility_id: int, data: FacilityUpdate, db: Session = Depends(get_db)
+) -> FacilityResponse:
+    """대상이 없으면 404. `category`, `name`은 요청에 필드 자체를 포함하면 null을 허용하지
+    않는다(DB NOT NULL 제약 반영, 422) — 필드를 아예 생략해야 기존 값이 유지된다.
+    """
+    facility = service.get_facility(db, facility_id)
+    if facility is None:
+        detail = "facility not found"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+    updated = service.update_facility(db, facility, data)
+    return FacilityResponse.model_validate(updated)
+
+
+@router.delete(
+    "/{facility_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="시설 삭제",
+    responses={**COMMON_ERRORS, 404: _FACILITY_NOT_FOUND_RESPONSE},
+)
+def delete_facility(facility_id: int, db: Session = Depends(get_db)) -> None:
+    """대상이 없으면 404."""
+    facility = service.get_facility(db, facility_id)
+    if facility is None:
+        detail = "facility not found"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+    service.delete_facility(db, facility)
 
 
 @router.get(
@@ -78,6 +153,22 @@ def trigger_operating_hours_crawl() -> CrawlResult:
     except JobAlreadyRunningError:
         detail = "operating hours crawl already running"
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
+
+
+@router.post(
+    "/import",
+    response_model=CrawlResult,
+    summary="시설 위치정보 xlsx 즉시 임포트",
+    responses=COMMON_ERRORS,
+)
+def trigger_facility_locations_import(db: Session = Depends(get_db)) -> CrawlResult:
+    """공식 xlsx(`data/seoul_childrens_grand_park_facility_locations.xlsx`)를 읽어
+    `external_id` 기준으로 upsert한다. 로컬 개발 환경에서 `alembic upgrade head` 이후
+    이 엔드포인트를 한 번 호출하면 prod와 동일한 시설 위치정보를 반영할 수 있다. 이미
+    존재하는 시설(`external_id` 기준)은 중복 추가되지 않고 값만 갱신된다. 관리자가
+    `POST /api/v1/facility`로 직접 등록한 시설(`external_id=null`)에는 영향을 주지 않는다.
+    """
+    return service.import_facility_locations(db)
 
 
 @router.post(

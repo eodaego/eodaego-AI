@@ -9,9 +9,16 @@ class FacilityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="시설 항목 PK")
-    external_id: int = Field(description="원본 데이터 출처 시스템의 ID (유니크)")
+    external_id: int | None = Field(
+        description="원본 데이터 출처 시스템의 ID (유니크). 관리자가 직접 등록한 시설"
+        "(예: 출입문)은 원본 데이터가 없어 null이다."
+    )
     category: str = Field(description="시설 분류 (원본 데이터 값 그대로)")
     name: str = Field(description="시설 이름")
+    code: str | None = Field(
+        description="안정적인 영문 식별 코드(예: 출입문의 MAIN_GATE). BE 등 외부 시스템이 "
+        "name 대신 참조할 수 있는 값이며, 코드가 없는 시설은 null이다."
+    )
     intro: str | None = Field(description="간단 소개. 없으면 null.")
     description: str | None = Field(description="상세 설명. 없으면 null.")
     latitude: float | None = Field(description="위도. 좌표 정보가 없는 시설은 null.")
@@ -89,3 +96,64 @@ class AmusementRideResponse(BaseModel):
     location: str | None = Field(description="위치 설명. 없으면 null.")
     is_active: bool = Field(description="운영 여부")
     updated_at: KstDatetime = Field(description="마지막 수정 시각 (KST)")
+
+
+class FacilityCreate(BaseModel):
+    category: str = Field(
+        description="시설 분류.", examples=["출입문"], min_length=1, max_length=50
+    )
+    name: str = Field(description="시설 이름.", examples=["정문"], min_length=1, max_length=100)
+    code: str | None = Field(
+        default=None,
+        description="안정적인 영문 식별 코드. 생략 시 null.",
+        examples=["MAIN_GATE"],
+        max_length=50,
+    )
+    intro: str | None = Field(default=None, description="간단 소개. 생략 시 null.")
+    description: str | None = Field(default=None, description="상세 설명. 생략 시 null.")
+    latitude: float | None = Field(default=None, description="위도. 생략 시 null.")
+    longitude: float | None = Field(default=None, description="경도. 생략 시 null.")
+    facility_type: str | None = Field(
+        default=None, description="세부 시설 유형. 생략 시 null.", max_length=50
+    )
+
+
+class FacilityUpdate(BaseModel):
+    category: str | None = Field(
+        default=None,
+        description="시설 분류. 필드를 생략하면 기존 값 유지, 명시적으로 null을 보내면 "
+        "422(DB NOT NULL 제약 반영).",
+        min_length=1,
+        max_length=50,
+    )
+    name: str | None = Field(
+        default=None,
+        description="시설 이름. 필드를 생략하면 기존 값 유지, 명시적으로 null을 보내면 "
+        "422(DB NOT NULL 제약 반영).",
+        min_length=1,
+        max_length=100,
+    )
+    code: str | None = Field(
+        default=None, description="안정적인 영문 식별 코드. 생략 시 기존 값 유지.", max_length=50
+    )
+    intro: str | None = Field(default=None, description="간단 소개. 생략 시 기존 값 유지.")
+    description: str | None = Field(default=None, description="상세 설명. 생략 시 기존 값 유지.")
+    latitude: float | None = Field(default=None, description="위도. 생략 시 기존 값 유지.")
+    longitude: float | None = Field(default=None, description="경도. 생략 시 기존 값 유지.")
+    facility_type: str | None = Field(
+        default=None, description="세부 시설 유형. 생략 시 기존 값 유지.", max_length=50
+    )
+
+    @field_validator("category")
+    @classmethod
+    def category_must_not_be_null(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("category must not be null")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_null(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("name must not be null")
+        return value

@@ -3,18 +3,26 @@ from string import Template
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domains.ai.suh_aider_client import call_chat
 from app.domains.crawling.model import CongestionSnapshot
 from app.domains.crawling.service import list_congestion_snapshots
 from app.domains.facility.model import Facility
-from app.domains.facility.service import list_facilities
+from app.domains.facility.service import get_facility_by_code, list_facilities
 from app.domains.prompt.service import get_active_prompt_template
+from app.domains.recommendation.model import PreferenceCategoryMapping
+from app.domains.recommendation.route_optimizer import optimize_route
 from app.domains.recommendation.schema import (
+    CompanionType,
+    LlmRecommendationResponse,
+    PreferenceCategoryMappingCreate,
     PreferenceTag,
     RecommendationRoutesRequest,
     RecommendationRoutesResponse,
+    RecommendedCourse,
+    RouteStop,
 )
 from app.domains.weather.model import WeatherSnapshot
 from app.domains.weather.service import get_latest_weather_snapshot
@@ -22,30 +30,94 @@ from app.domains.weather.service import get_latest_weather_snapshot
 logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
+_ENTRANCE_CATEGORY = "출입문"
+_MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
+    200  # 관리자 입력 자유 텍스트가 프롬프트를 과도하게 지배하지 않도록 제한
+)
 
-_PREFERENCE_TAG_CATEGORIES: dict[PreferenceTag, tuple[str, ...]] = {
-    "ANIMAL_FRIENDLY": ("동물나라",),
-    "PLANT_FRIENDLY": ("자연나라", "조경시설"),
-    "ACTIVITY": ("재미나라", "체험시설", "운동 및 대관시설"),
+_COMPANION_TYPE_HINTS: dict[CompanionType, str] = {
+    "ALONE": "관심사 중심, 이동 효율 우선, 조용한 코스 가능",
+    "WITH_CHILD": "짧은 이동, 쉬운 퀴즈, 체험형 장소, 화장실·휴식 공간 고려",
+    "WITH_PARTNER": "포토스팟, 산책, 분위기 좋은 장소",
+    "WITH_FRIENDS": "액티비티, 넓은 동선, 활동형 장소",
+    "WITH_ELDERLY": "짧은 이동, 평지 위주, 휴식 공간 자주 포함",
 }
 
 
+def create_preference_category_mapping(
+    db: Session, data: PreferenceCategoryMappingCreate
+) -> PreferenceCategoryMapping:
+    mapping = PreferenceCategoryMapping(**data.model_dump())
+    db.add(mapping)
+    db.commit()
+    db.refresh(mapping)
+    return mapping
+
+
+def list_preference_category_mappings(
+    db: Session, preference_tag: PreferenceTag | None = None
+) -> list[PreferenceCategoryMapping]:
+    stmt = select(PreferenceCategoryMapping)
+    if preference_tag is not None:
+        stmt = stmt.where(PreferenceCategoryMapping.preference_tag == preference_tag)
+    return list(db.scalars(stmt).all())
+
+
+def get_preference_category_mapping(
+    db: Session, mapping_id: int
+) -> PreferenceCategoryMapping | None:
+    return db.get(PreferenceCategoryMapping, mapping_id)
+
+
+def delete_preference_category_mapping(db: Session, mapping: PreferenceCategoryMapping) -> None:
+    db.delete(mapping)
+    db.commit()
+
+
 def _select_candidate_facilities(
-    db: Session, preference_tags: list[PreferenceTag]
+    db: Session, preference_tags: list[PreferenceTag] | None
 ) -> list[Facility]:
-    target_categories = {
-        category for tag in preference_tags for category in _PREFERENCE_TAG_CATEGORIES[tag]
-    }
-    return [f for f in list_facilities(db) if f.category in target_categories]
+    stmt = select(PreferenceCategoryMapping.category)
+    if preference_tags:
+        stmt = stmt.where(PreferenceCategoryMapping.preference_tag.in_(preference_tags))
+    target_categories = set(db.scalars(stmt).all())
+    # 좌표 없는 시설은 경로 최적화 알고리즘이 다룰 수 없으므로 후보 단계에서 제외한다.
+    # 출입문 카테고리가 실수로 매핑되더라도 게이트가 중간 방문지 후보로 섞이지 않도록 제외한다
+    # (입구/출구는 이미 별도 필드로 고정되므로, 섞이면 요청마다 입구/출구 누출 검증 실패가
+    # 반복될 수 있다).
+    return [
+        f
+        for f in list_facilities(db)
+        if f.category in target_categories
+        and f.category != _ENTRANCE_CATEGORY
+        and f.latitude is not None
+        and f.longitude is not None
+    ]
+
+
+def _get_entrance_exit_facilities(
+    db: Session, entrance_facility_code: str, exit_facility_code: str
+) -> tuple[Facility, Facility]:
+    entrance = get_facility_by_code(db, entrance_facility_code)
+    if entrance is None or entrance.category != _ENTRANCE_CATEGORY:
+        detail = "entrance_facility_code가 유효한 출입구 Facility를 가리키지 않습니다"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    exit_facility = get_facility_by_code(db, exit_facility_code)
+    if exit_facility is None or exit_facility.category != _ENTRANCE_CATEGORY:
+        detail = "exit_facility_code가 유효한 출입구 Facility를 가리키지 않습니다"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    if entrance.latitude is None or entrance.longitude is None:
+        detail = "entrance_facility_code에 해당하는 Facility에 좌표 정보가 없습니다"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    if exit_facility.latitude is None or exit_facility.longitude is None:
+        detail = "exit_facility_code에 해당하는 Facility에 좌표 정보가 없습니다"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    return entrance, exit_facility
 
 
 def _format_facility_candidate(facility: Facility) -> str:
-    location = (
-        f"({facility.latitude}, {facility.longitude})"
-        if facility.latitude is not None and facility.longitude is not None
-        else "위치 정보 없음"
-    )
-    description = facility.intro or facility.description or ""
+    location = f"({facility.latitude}, {facility.longitude})"
+    description = (facility.intro or facility.description or "")[:_MAX_DESCRIPTION_LENGTH_IN_PROMPT]
     return (
         f"- id={facility.id}, name={facility.name}, category={facility.category}, "
         f"위치={location}, 설명={description}"
@@ -54,6 +126,8 @@ def _format_facility_candidate(facility: Facility) -> str:
 
 def _build_prompt_variables(
     candidates: list[Facility],
+    entrance: Facility,
+    exit_facility: Facility,
     weather: WeatherSnapshot | None,
     congestion: CongestionSnapshot | None,
     data: RecommendationRoutesRequest,
@@ -70,15 +144,22 @@ def _build_prompt_variables(
         if congestion is not None
         else "혼잡도 정보 없음"
     )
-    return {
+    variables = {
         "candidates": candidates_text,
         "weather": weather_text,
         "congestion": congestion_text,
-        "preference_tags": ", ".join(data.preference_tags),
-        "stay_duration_minutes": str(data.stay_duration_minutes),
-        "start_location": data.start_location,
-        "with_children": "예" if data.with_children else "아니오",
+        "entrance": _format_facility_candidate(entrance),
+        "exit": _format_facility_candidate(exit_facility),
     }
+    # 사용자가 선택하지 않은 항목은 프롬프트 변수 자체를 생략한다(safe_substitute는 매핑에
+    # 없는 자리표시자를 에러 없이 그대로 남기므로, 빈 문자열 등 임의 기본값을 넣지 않는다).
+    if data.preference_tags:
+        variables["preference_tags"] = ", ".join(data.preference_tags)
+    if data.stay_duration_minutes is not None:
+        variables["stay_duration_minutes"] = str(data.stay_duration_minutes)
+    if data.companion_type is not None:
+        variables["companion_type"] = _COMPANION_TYPE_HINTS[data.companion_type]
+    return variables
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -93,22 +174,65 @@ def _strip_markdown_fences(text: str) -> str:
     return "\n".join(lines)
 
 
-def _parse_llm_response(content: str, valid_facility_ids: set[int]) -> RecommendationRoutesResponse:
+def _require_coordinates(facility: Facility) -> tuple[float, float]:
+    """좌표가 보장돼야 하는 지점에서 float | None을 좁혀 mypy strict를 통과시킨다."""
+    latitude, longitude = facility.latitude, facility.longitude
+    if latitude is None or longitude is None:
+        raise RuntimeError(f"좌표 없는 시설이 처리 과정에 포함됨: facility_id={facility.id}")
+    return latitude, longitude
+
+
+def _parse_llm_response(
+    content: str,
+    valid_facility_ids: set[int],
+    entrance: Facility,
+    exit_facility: Facility,
+    facilities_by_id: dict[int, Facility],
+) -> RecommendationRoutesResponse:
     try:
-        parsed = RecommendationRoutesResponse.model_validate_json(_strip_markdown_fences(content))
+        parsed = LlmRecommendationResponse.model_validate_json(_strip_markdown_fences(content))
     except ValidationError as exc:
         logger.warning("LLM 응답 파싱 실패", exc_info=True)
         raise RuntimeError(f"LLM 응답 파싱 실패: {exc}") from exc
-    for course in parsed.courses:
-        for stop in course.stops:
-            if stop.facility_id not in valid_facility_ids:
+
+    entrance_point = _require_coordinates(entrance)
+    exit_point = _require_coordinates(exit_facility)
+
+    courses: list[RecommendedCourse] = []
+    for llm_course in parsed.courses:
+        if len(set(llm_course.facility_ids)) != len(llm_course.facility_ids):
+            logger.warning(
+                "LLM 응답의 코스에 중복된 facility_id가 포함됨: %s", llm_course.facility_ids
+            )
+            raise RuntimeError(
+                f"LLM 응답의 코스에 중복된 facility_id가 포함됨: {llm_course.facility_ids}"
+            )
+        for facility_id in llm_course.facility_ids:
+            if facility_id in (entrance.id, exit_facility.id):
                 logger.warning(
-                    "LLM 응답에 존재하지 않는 facility_id가 포함됨: %s", stop.facility_id
+                    "LLM 응답에 입구/출구 facility_id가 중간 방문지로 포함됨: %s", facility_id
                 )
                 raise RuntimeError(
-                    f"LLM 응답에 존재하지 않는 facility_id가 포함됨: {stop.facility_id}"
+                    f"LLM 응답에 입구/출구 facility_id가 중간 방문지로 포함됨: {facility_id}"
                 )
-    return parsed
+            if facility_id not in valid_facility_ids:
+                logger.warning("LLM 응답에 존재하지 않는 facility_id가 포함됨: %s", facility_id)
+                raise RuntimeError(f"LLM 응답에 존재하지 않는 facility_id가 포함됨: {facility_id}")
+
+        waypoints = [
+            (facility_id, *_require_coordinates(facilities_by_id[facility_id]))
+            for facility_id in llm_course.facility_ids
+        ]
+        ordered_ids = optimize_route(start=entrance_point, end=exit_point, waypoints=waypoints)
+        stop_ids = [entrance.id, *ordered_ids, exit_facility.id]
+        stops = [
+            RouteStop(facility_id=facility_id, order=order)
+            for order, facility_id in enumerate(stop_ids, start=1)
+        ]
+        courses.append(
+            RecommendedCourse(title=llm_course.title, reason=llm_course.reason, stops=stops)
+        )
+    return RecommendationRoutesResponse(courses=courses)
 
 
 def generate_recommendation(
@@ -118,6 +242,10 @@ def generate_recommendation(
     if prompt is None:
         detail = "활성화된 추천 프롬프트가 없습니다"
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+
+    entrance, exit_facility = _get_entrance_exit_facilities(
+        db, data.entrance_facility_code, data.exit_facility_code
+    )
 
     candidates = _select_candidate_facilities(db, data.preference_tags)
     if not candidates:
@@ -130,16 +258,32 @@ def generate_recommendation(
     congestion_snapshots = list_congestion_snapshots(db, limit=1)
     congestion = congestion_snapshots[0] if congestion_snapshots else None
 
-    variables = _build_prompt_variables(candidates, weather, congestion, data)
-    system_content = Template(prompt.template_text).safe_substitute(variables)
+    variables = _build_prompt_variables(
+        candidates, entrance, exit_facility, weather, congestion, data
+    )
+    template = Template(prompt.template_text)
+    missing_vars = template.get_identifiers() - variables.keys()
+    if missing_vars:
+        # 활성 템플릿이 최신 변수명(entrance/exit/companion_type 등)으로 갱신되지 않은 경우를
+        # 조용히 넘어가지 않고 로그로 남긴다 — safe_substitute는 매핑에 없는 자리표시자를
+        # 에러 없이 그대로 남기므로, 이 로그가 없으면 배포 후 무음 실패가 된다.
+        logger.warning(
+            "프롬프트 템플릿에 이번 요청에서 채워지지 않은 변수가 있음(오래된 플레이스홀더일 "
+            "가능성): %s",
+            sorted(missing_vars),
+        )
+    system_content = template.safe_substitute(variables)
     messages = [{"role": "system", "content": system_content}]
-    valid_facility_ids = {facility.id for facility in candidates}
+    facilities_by_id = {facility.id: facility for facility in candidates}
+    valid_facility_ids = set(facilities_by_id.keys())
 
     last_error = RuntimeError("추천 생성 실패")
     for _ in range(_MAX_ATTEMPTS):
         try:
             content = call_chat(model=prompt.model, messages=messages)
-            return _parse_llm_response(content, valid_facility_ids)
+            return _parse_llm_response(
+                content, valid_facility_ids, entrance, exit_facility, facilities_by_id
+            )
         except RuntimeError as exc:
             last_error = exc
     raise HTTPException(

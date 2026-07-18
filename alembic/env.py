@@ -14,12 +14,14 @@ from app.domains.crawling.model import (  # noqa: E402, F401
     CongestionSnapshot,
     ScheduleConfig,
 )
+from app.domains.event.model import CulturalEvent  # noqa: E402, F401
 from app.domains.facility.model import (  # noqa: E402, F401
     AmusementRide,
     Facility,
     OperatingHoursSection,
 )
 from app.domains.prompt.model import PromptTemplate  # noqa: E402, F401
+from app.domains.recommendation.model import PreferenceCategoryMapping  # noqa: E402, F401
 from app.domains.weather.model import WeatherSnapshot  # noqa: E402, F401
 
 config = context.config
