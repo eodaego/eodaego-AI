@@ -2,14 +2,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-PreferenceTag = Literal["ANIMAL_FRIENDLY", "PLANT_FRIENDLY", "ACTIVITY", "LEARNING"]
+PreferenceTag = Literal["ANIMAL_FRIENDLY", "PLANT_FRIENDLY", "ACTIVITY"]
 
 _PREFERENCE_TAGS_DESC = (
     "추천 동선에 반영할 선호 태그. 복수 선택 가능하며, 선택된 태그가 매핑된 "
     "Facility.category 전체가 후보로 모인다 "
     "(ANIMAL_FRIENDLY→동물나라, PLANT_FRIENDLY→자연나라/조경시설, "
-    "ACTIVITY→재미나라/체험시설/운동 및 대관시설, "
-    "LEARNING→동물나라/자연나라(도감 항목을 볼 수 있는 장소))."
+    "ACTIVITY→재미나라/체험시설/운동 및 대관시설)."
 )
 
 
