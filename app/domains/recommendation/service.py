@@ -1,5 +1,6 @@
 import logging
 from string import Template
+from typing import Literal
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
@@ -32,6 +33,7 @@ from app.domains.weather.service import get_latest_weather_snapshot
 logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
+_COURSE_LABELS: tuple[Literal["A", "B", "C"], ...] = ("A", "B", "C")
 _ENTRANCE_CATEGORY = "출입문"
 _MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
     200  # 관리자 입력 자유 텍스트가 프롬프트를 과도하게 지배하지 않도록 제한
@@ -208,7 +210,7 @@ def _parse_llm_response(
     }
 
     courses: list[RecommendedCourse] = []
-    for llm_course in parsed.courses:
+    for index, llm_course in enumerate(parsed.courses):
         if len(set(llm_course.facility_ids)) != len(llm_course.facility_ids):
             logger.warning(
                 "LLM 응답의 코스에 중복된 facility_id가 포함됨: %s", llm_course.facility_ids
@@ -243,6 +245,7 @@ def _parse_llm_response(
         ]
         courses.append(
             RecommendedCourse(
+                label=_COURSE_LABELS[index],
                 title=llm_course.title,
                 reason=llm_course.reason,
                 tag_labels=llm_course.tag_labels,
