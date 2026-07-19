@@ -242,7 +242,12 @@ def _parse_llm_response(
             for order, facility_id in enumerate(stop_ids, start=1)
         ]
         courses.append(
-            RecommendedCourse(title=llm_course.title, reason=llm_course.reason, stops=stops)
+            RecommendedCourse(
+                title=llm_course.title,
+                reason=llm_course.reason,
+                tag_labels=llm_course.tag_labels,
+                stops=stops,
+            )
         )
     return RecommendationRoutesResponse(courses=courses)
 
