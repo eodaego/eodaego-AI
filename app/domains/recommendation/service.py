@@ -11,8 +11,9 @@ from app.domains.crawling.model import CongestionSnapshot
 from app.domains.crawling.service import list_congestion_snapshots
 from app.domains.facility.model import Facility
 from app.domains.facility.service import get_facility_by_code, list_facilities
+from app.domains.prompt.model import PromptTemplate
 from app.domains.prompt.service import get_active_prompt_template
-from app.domains.recommendation.model import PreferenceCategoryMapping
+from app.domains.recommendation.model import PreferenceCategoryMapping, RecommendationHistory
 from app.domains.recommendation.route_optimizer import optimize_route
 from app.domains.recommendation.schema import (
     CompanionType,
@@ -235,14 +236,38 @@ def _parse_llm_response(
     return RecommendationRoutesResponse(courses=courses)
 
 
-def generate_recommendation(
-    db: Session, data: RecommendationRoutesRequest
-) -> RecommendationRoutesResponse:
-    prompt = get_active_prompt_template(db, purpose="recommendation")
-    if prompt is None:
-        detail = "활성화된 추천 프롬프트가 없습니다"
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+def _save_recommendation_history_best_effort(
+    db: Session,
+    data: RecommendationRoutesRequest,
+    *,
+    is_success: bool,
+    response: RecommendationRoutesResponse | None,
+    failure_status_code: int | None,
+    failure_reason: str | None,
+    prompt_template_id: int | None,
+    model: str | None,
+) -> None:
+    """이력 저장은 부가 기능이므로, 저장 자체가 실패해도 추천 응답에는 영향을 주지 않는다."""
+    try:
+        history = RecommendationHistory(
+            request=data.model_dump(mode="json"),
+            is_success=is_success,
+            response=response.model_dump(mode="json") if response is not None else None,
+            failure_status_code=failure_status_code,
+            failure_reason=failure_reason,
+            prompt_template_id=prompt_template_id,
+            model=model,
+        )
+        db.add(history)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("추천 이력 저장 실패", exc_info=True)
 
+
+def _generate_recommendation_with_prompt(
+    db: Session, data: RecommendationRoutesRequest, prompt: PromptTemplate
+) -> RecommendationRoutesResponse:
     entrance, exit_facility = _get_entrance_exit_facilities(
         db, data.entrance_facility_code, data.exit_facility_code
     )
@@ -289,3 +314,49 @@ def generate_recommendation(
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY, detail=str(last_error)
     ) from last_error
+
+
+def generate_recommendation(
+    db: Session, data: RecommendationRoutesRequest
+) -> RecommendationRoutesResponse:
+    prompt = get_active_prompt_template(db, purpose="recommendation")
+    if prompt is None:
+        detail = "활성화된 추천 프롬프트가 없습니다"
+        _save_recommendation_history_best_effort(
+            db,
+            data,
+            is_success=False,
+            response=None,
+            failure_status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            failure_reason=detail,
+            prompt_template_id=None,
+            model=None,
+        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+
+    try:
+        result = _generate_recommendation_with_prompt(db, data, prompt)
+    except HTTPException as exc:
+        _save_recommendation_history_best_effort(
+            db,
+            data,
+            is_success=False,
+            response=None,
+            failure_status_code=exc.status_code,
+            failure_reason=str(exc.detail),
+            prompt_template_id=prompt.id,
+            model=prompt.model,
+        )
+        raise
+
+    _save_recommendation_history_best_effort(
+        db,
+        data,
+        is_success=True,
+        response=result,
+        failure_status_code=None,
+        failure_reason=None,
+        prompt_template_id=prompt.id,
+        model=prompt.model,
+    )
+    return result
