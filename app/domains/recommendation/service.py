@@ -10,6 +10,7 @@ from app.domains.ai.suh_aider_client import call_chat
 from app.domains.crawling.model import CongestionSnapshot
 from app.domains.crawling.service import list_congestion_snapshots
 from app.domains.facility.model import Facility
+from app.domains.facility.schema import FacilityResponse
 from app.domains.facility.service import get_facility_by_code, list_facilities
 from app.domains.prompt.model import PromptTemplate
 from app.domains.prompt.service import get_active_prompt_template
@@ -198,6 +199,13 @@ def _parse_llm_response(
 
     entrance_point = _require_coordinates(entrance)
     exit_point = _require_coordinates(exit_facility)
+    # 응답 조립 시 입구/출구까지 포함해 facility_id로 실제 Facility 객체를 되찾기 위한 맵
+    # (facilities_by_id는 중간 방문지 후보만 담고 있어 입구/출구가 빠져있다)
+    all_facilities_by_id: dict[int, Facility] = {
+        **facilities_by_id,
+        entrance.id: entrance,
+        exit_facility.id: exit_facility,
+    }
 
     courses: list[RecommendedCourse] = []
     for llm_course in parsed.courses:
@@ -227,7 +235,10 @@ def _parse_llm_response(
         ordered_ids = optimize_route(start=entrance_point, end=exit_point, waypoints=waypoints)
         stop_ids = [entrance.id, *ordered_ids, exit_facility.id]
         stops = [
-            RouteStop(facility_id=facility_id, order=order)
+            RouteStop(
+                facility=FacilityResponse.model_validate(all_facilities_by_id[facility_id]),
+                order=order,
+            )
             for order, facility_id in enumerate(stop_ids, start=1)
         ]
         courses.append(
