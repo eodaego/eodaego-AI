@@ -3,7 +3,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.kst import KstDatetime
-from app.domains.facility.schema import FacilityResponse
 
 PreferenceTag = Literal[
     "ANIMAL", "NATURE", "ACTIVITY", "PHOTO_SPOT", "RELAXATION", "CULTURE_EVENT", "LEARNING"
@@ -62,15 +61,25 @@ class RecommendationRoutesRequest(BaseModel):
 
 
 class RouteStop(BaseModel):
-    facility: FacilityResponse = Field(
-        description="추천된 시설의 표시용 스냅샷. BE 자체 시설 PK와의 매칭을 보장하지 않는다."
-    )
+    facility_id: int = Field(description="추천된 시설(Facility)의 PK.")
     order: int = Field(description="이 코스 내 방문 순서(1부터 시작).", ge=1)
+
+
+_TAG_LABELS_DESC = (
+    "이 코스의 특징을 요약하는 짧은 태그 라벨 목록(예: '동물듬뿍', '산책하기 좋은 코스'). "
+    "LLM이 추천 동선을 고려해 자유 생성하며, 코스마다 최대 3개까지 포함한다."
+)
 
 
 class RecommendedCourse(BaseModel):
     title: str = Field(description="코스 제목.")
     reason: str = Field(description="이 코스를 추천하는 이유.")
+    tag_labels: list[str] = Field(
+        description=_TAG_LABELS_DESC,
+        min_length=1,
+        max_length=3,
+        examples=[["동물듬뿍", "산책하기 좋은 코스"]],
+    )
     stops: list[RouteStop] = Field(
         description="방문 순서대로 정렬된 정류지 목록(입구는 order=1, 출구는 마지막 order로 포함)."
     )
@@ -86,6 +95,12 @@ class RecommendationRoutesResponse(BaseModel):
 class LlmCourse(BaseModel):
     title: str = Field(description="코스 제목.")
     reason: str = Field(description="이 코스를 추천하는 이유.")
+    tag_labels: list[str] = Field(
+        description=_TAG_LABELS_DESC,
+        min_length=1,
+        max_length=3,
+        examples=[["동물듬뿍", "산책하기 좋은 코스"]],
+    )
     facility_ids: list[int] = Field(
         description="입구/출구를 제외한 중간 방문지 facility_id 목록(순서 무관).",
         max_length=20,
