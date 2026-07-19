@@ -73,8 +73,14 @@ _TAG_LABELS_DESC = (
     "LLM이 추천 동선을 고려해 자유 생성하며, 코스마다 최대 3개까지 포함한다."
 )
 
+_LABEL_DESC = (
+    "이 코스가 A/B/C 중 몇 번째로 제시된 코스인지 나타내는 라벨. LLM이 아니라 서비스가 "
+    "응답 배열 순서(첫 번째=A, 두 번째=B, 세 번째=C)에 따라 결정론적으로 부여한다."
+)
+
 
 class RecommendedCourse(BaseModel):
+    label: Literal["A", "B", "C"] = Field(description=_LABEL_DESC, examples=["A"])
     title: str = Field(description="코스 제목.")
     reason: str = Field(description="이 코스를 추천하는 이유.")
     tag_labels: list[str] = Field(
@@ -89,12 +95,18 @@ class RecommendedCourse(BaseModel):
 
 
 class RecommendationRoutesResponse(BaseModel):
-    courses: list[RecommendedCourse] = Field(description="추천 코스 목록.")
+    courses: list[RecommendedCourse] = Field(
+        description="추천 코스 목록. 항상 A/B/C 3개 코스로 고정된다.",
+        min_length=3,
+        max_length=3,
+    )
 
 
 # LLM 원시 응답 파싱 전용 내부 스키마 — 공개 응답 스키마(RouteStop/RecommendedCourse)와 달리
 # 입구/출구를 제외한 중간 방문지 facility_id만 순서 무관하게 담는다. 실제 방문 순서는
-# route_optimizer.optimize_route()가 좌표 기반으로 계산한 뒤 서비스가 조립한다.
+# route_optimizer.optimize_route()가 좌표 기반으로 계산한 뒤 서비스가 조립한다. label은
+# LLM에게 생성을 맡기지 않고 서비스가 배열 순서로 결정론적으로 부여하므로 이 스키마에는
+# 포함하지 않는다.
 class LlmCourse(BaseModel):
     title: str = Field(description="코스 제목.")
     reason: str = Field(description="이 코스를 추천하는 이유.")
@@ -111,7 +123,11 @@ class LlmCourse(BaseModel):
 
 
 class LlmRecommendationResponse(BaseModel):
-    courses: list[LlmCourse] = Field(description="LLM이 구성한 코스 목록(방문 순서 미포함).")
+    courses: list[LlmCourse] = Field(
+        description="LLM이 구성한 코스 목록(방문 순서 미포함). 정확히 3개여야 한다.",
+        min_length=3,
+        max_length=3,
+    )
 
 
 class PreferenceCategoryMappingCreate(BaseModel):
