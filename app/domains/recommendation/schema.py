@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.kst import KstDatetime
+from app.domains.facility.schema import FacilityResponse
 
 PreferenceTag = Literal[
     "ANIMAL", "NATURE", "ACTIVITY", "PHOTO_SPOT", "RELAXATION", "CULTURE_EVENT", "LEARNING"
@@ -61,7 +62,9 @@ class RecommendationRoutesRequest(BaseModel):
 
 
 class RouteStop(BaseModel):
-    facility_id: int = Field(description="추천된 시설(Facility)의 PK.")
+    facility: FacilityResponse = Field(
+        description="추천된 시설의 표시용 스냅샷. BE 자체 시설 PK와의 매칭을 보장하지 않는다."
+    )
     order: int = Field(description="이 코스 내 방문 순서(1부터 시작).", ge=1)
 
 
