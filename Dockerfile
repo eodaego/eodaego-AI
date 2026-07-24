@@ -29,7 +29,8 @@ RUN uv sync --frozen
 # 애플리케이션 소스 코드 복사
 COPY . /app
 
-# FastAPI/uvicorn이 리스닝할 포트 (내부망 전용, 외부에는 노출하지 않음)
+# FastAPI/uvicorn이 리스닝할 포트. 실제 호스트 노출 여부는 EXPOSE가 아닌 `docker run -p` 옵션이 결정한다
+# (임시 예외(2026-07-24~실서비스 전환 전까지): 배포 시 -p 8001:8000으로 호스트 공개 중 — .claude/rules/00-project-overview.md 참고)
 EXPOSE 8000
 
 # 컨테이너 기본 실행 커맨드
