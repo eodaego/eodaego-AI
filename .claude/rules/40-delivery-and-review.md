@@ -102,7 +102,7 @@
   - (테스트 코드 미작성 정책 — `30-testing-and-verification.md` 참고)
   - `docker build -t eodaego-ai .` — 빌드 성공 확인
   - 환경변수(`APP_ENV`, `INTERNAL_API_KEY`, `DATABASE_URL`) `.env.local`/`.env.production` 및 CI `secrets.ENV_FILE` 설정 확인
-  - CI(`python-server-cicd.yml`) 배포 시 `-p` 옵션 없이 `eodaego-internal` 네트워크로만 join되는지 확인
+  - CI(`python-server-cicd.yml`) 배포 시 `eodaego-internal` 네트워크로 join되는지 확인. **임시 예외(2026-07-24~실서비스 전환 전까지)**: 개발 편의 목적의 `-p 8001:8000` 추가는 정상이며, 그 외 포트가 추가되지 않았는지만 확인. 실서비스 전환 시 `-p` 옵션이 완전히 제거되었는지 반드시 재확인한다.
 
 - feature flag 정책:
   - 현재 미사용. 내부 전용 CRUD/추천 API로 사용자 대상 A/B 테스트 대상이 아니라 도입 필요성이 낮음.
@@ -110,4 +110,5 @@
 - rollback 필요 시 기준:
   - `GET /health`가 503을 반환하거나 컨테이너가 기동에 실패하는 경우 즉시 롤백
   - `X-Internal-Api-Key` 인증 또는 `eodaego-internal` 네트워크 격리 설정 오류로 BE 연동이 끊긴 경우 즉시 롤백
+  - **임시 예외 기간 중(2026-07-24~실서비스 전환 전까지) 8001 포트로 비정상 접근·보안 이슈가 확인된 경우 즉시 `-p` 옵션을 제거해 원복한 뒤 재배포**
   - 롤백 방법: 이전 커밋으로 revert PR 생성 후 재배포, 또는 NAS에서 이전 DockerHub 이미지 태그로 재배포

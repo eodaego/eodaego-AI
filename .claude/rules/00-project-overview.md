@@ -12,7 +12,7 @@
 - Framework: FastAPI (동기(`def`) 라우터 기반 — async 미사용)
 - Runtime: uvicorn, uv로 의존성 관리(`pyproject.toml` + `uv.lock`)
 - Database / storage: PostgreSQL (`eodaego_ai` 전용 인스턴스, BE의 `eodaego` DB와 완전 분리) + SQLAlchemy 2.0 동기 ORM + Alembic 마이그레이션
-- Infra / deployment: Docker 단일 컨테이너(`eodaego-ai`, 내부 포트 8000, 호스트 포트 미바인딩), 커스텀 브리지 네트워크 `eodaego-internal`로 BE와만 통신. GitHub Actions(`.github/workflows/python-server-cicd.yml`)가 DockerHub에 푸시 후 SSH로 NAS에 배포
+- Infra / deployment: Docker 단일 컨테이너(`eodaego-ai`, 내부 포트 8000), 원칙은 호스트 포트 미바인딩. **임시 예외(2026-07-24~실서비스 전환 전까지)**: 개발 편의를 위해 호스트 포트 8001을 공개 운영 중(`-p 8001:8000`) — 실서비스 전환 시 반드시 원복. 커스텀 브리지 네트워크 `eodaego-internal`로 BE와 통신. GitHub Actions(`.github/workflows/python-server-cicd.yml`)가 DockerHub에 푸시 후 SSH로 NAS에 배포
 
 ## Important directories
 
@@ -34,15 +34,15 @@
 - build: `docker build -t eodaego-ai .`
 - unit-test / integration-test / e2e-test: 해당 없음 — 테스트 코드를 작성하지 않는 정책 (`30-testing-and-verification.md` 참고)
 - run-dev: `APP_ENV=local uv run uvicorn app.main:app --reload --port 8000` (`.env.local` 필요)
-- run-prod-like: `docker run --name eodaego-ai --network eodaego-internal --env-file .env.production eodaego-ai` (호스트 포트 `-p` 옵션 사용 금지)
+- run-prod-like: `docker run --name eodaego-ai --network eodaego-internal --env-file .env.production eodaego-ai` (원칙은 호스트 포트 `-p` 옵션 사용 금지. **임시 예외**: 실서비스 전환 전까지 개발 편의 목적으로 `-p 8001:8000`을 추가해 운영 중 — 실서비스 전환 시 제거)
 - 참고(포맷): `uv run ruff format .`
 - 참고(마이그레이션): `uv run alembic revision --autogenerate -m "설명"` → 리비전 파일 검토 → `uv run alembic upgrade head`
 
 ## Project-specific constraints
 
 - 반드시 지켜야 하는 제약:
-  - **모듈 임포트/컨테이너 기동 시점에 외부에서 모델·가중치를 동기 다운로드하는 라이브러리 도입 금지(원칙)**: 이 AI 서버는 호스트 포트 미바인딩 + `eodaego-internal` 내부망 전용으로 배포된다(인바운드만 차단, 아웃바운드는 개인 LLM 서버/Vertex AI 호출을 위해 열려 있어야 함). 다른 사내 내부망 전용 AI 서버에서 실제로 발생한 사례: TrustMark류 라이브러리가 `import` 시점에 인터넷에서 모델을 다운로드하는데, 다운로드가 실패하면 앱 자체가 기동되지 않아 `/health`조차 응답하지 못함. 향후 `recommendation` 도메인 등에 로컬 임베딩/토크나이저 모델을 쓰는 라이브러리를 추가할 경우, (1) 다운로드를 첫 실제 요청 시점으로 지연 로딩하거나 (2) 이미지 빌드 타임에 모델 가중치를 이미지 안에 미리 포함시켜 런타임 다운로드를 없앨 것. 임포트 시점 동기 다운로드 방식은 채택하지 않는다.
-  - Docker 컨테이너 실행 시 `-p`(호스트 포트 퍼블리시) 옵션 사용 금지. AI는 `eodaego-internal` 네트워크에만 join하며, BE만 컨테이너 이름(`eodaego-ai`) + 내부 포트(8000)로 접근한다. uvicorn은 반드시 `--host 0.0.0.0`으로 바인딩한다(`127.0.0.1` 바인딩 시 같은 네트워크의 다른 컨테이너에서도 접근 불가).
+  - **모듈 임포트/컨테이너 기동 시점에 외부에서 모델·가중치를 동기 다운로드하는 라이브러리 도입 금지(원칙)**: 이 AI 서버는 원칙적으로 호스트 포트 미바인딩 + `eodaego-internal` 내부망 전용으로 배포된다(인바운드만 차단, 아웃바운드는 개인 LLM 서버/Vertex AI 호출을 위해 열려 있어야 함. **임시 예외(2026-07-24~실서비스 전환 전까지)**: 개발 편의를 위해 인바운드 8001 포트가 한시적으로 열려 있음). 다른 사내 내부망 전용 AI 서버에서 실제로 발생한 사례: TrustMark류 라이브러리가 `import` 시점에 인터넷에서 모델을 다운로드하는데, 다운로드가 실패하면 앱 자체가 기동되지 않아 `/health`조차 응답하지 못함. 향후 `recommendation` 도메인 등에 로컬 임베딩/토크나이저 모델을 쓰는 라이브러리를 추가할 경우, (1) 다운로드를 첫 실제 요청 시점으로 지연 로딩하거나 (2) 이미지 빌드 타임에 모델 가중치를 이미지 안에 미리 포함시켜 런타임 다운로드를 없앨 것. 임포트 시점 동기 다운로드 방식은 채택하지 않는다.
+  - Docker 컨테이너 실행 시 `-p`(호스트 포트 퍼블리시) 옵션 사용 금지가 원칙이다. AI는 `eodaego-internal` 네트워크에만 join하며, BE만 컨테이너 이름(`eodaego-ai`) + 내부 포트(8000)로 접근한다. **임시 예외(2026-07-24~실서비스 전환 전까지)**: 개발 환경 접근 편의를 위해 호스트 포트 8001을 `-p 8001:8000`으로 공개 운영 중 — 실서비스 전환 시 반드시 제거하고 원칙대로 원복한다. uvicorn은 반드시 `--host 0.0.0.0`으로 바인딩한다(`127.0.0.1` 바인딩 시 같은 네트워크의 다른 컨테이너에서도 접근 불가).
   - `/health`를 제외한 모든 엔드포인트는 `X-Internal-Api-Key` 헤더 검증(`core/security.py`의 dependency)을 거쳐야 한다. 새 라우터를 추가할 때 `dependencies=[Depends(verify_internal_api_key)]`를 빠뜨리지 않는다.
   - 테스트 코드를 작성하지 않는다(pytest, testcontainers, `tests/` 디렉터리 등 전부 미사용) — 2026-07-09 결정, `eodaego-server`와 동일 정책. 신규 기능 검증은 Swagger UI(`/docs`)·curl 등 수동 확인 또는 `ruff`/`mypy` 정적 검사로 대체한다.
   - SQLAlchemy는 동기(sync) 엔진만 사용한다(`psycopg` sync 드라이버). 라우터는 `async def`가 아닌 `def`로 작성해 FastAPI가 스레드풀에서 실행하도록 둔다. APScheduler 크롤링 job도 동일한 동기 세션 패턴을 재사용한다.
@@ -54,6 +54,6 @@
 
 ## Change policy
 
-- 어떤 변경은 허용되고 어떤 변경은 금지되는지: `app/domains/` 하위 신규 도메인(예: `recommendation`) 추가·기존 도메인 확장, `alembic` 리비전 추가, `core`/`db`/`scheduler`의 공통 로직 수정은 허용. 위 "Project-specific constraints"를 위반하는 변경(호스트 포트 바인딩 추가, 인증 dependency 제거, async 세션 도입, 테스트 코드 추가 등)은 금지.
+- 어떤 변경은 허용되고 어떤 변경은 금지되는지: `app/domains/` 하위 신규 도메인(예: `recommendation`) 추가·기존 도메인 확장, `alembic` 리비전 추가, `core`/`db`/`scheduler`의 공통 로직 수정은 허용. 위 "Project-specific constraints"를 위반하는 변경(인증 dependency 제거, async 세션 도입, 테스트 코드 추가 등)은 금지. **호스트 포트 바인딩 추가는 원칙적으로 금지이나, 임시 예외 기간(2026-07-24~실서비스 전환 전까지) 동안은 개발 편의 목적의 8001 포트 공개만 허용된 상태다 — 그 외 포트 추가·공개 범위 확대는 금지이며, 실서비스 전환 시 반드시 원복한다.**
 - 지금 레포에서 수정해도 되는 범위: 이 레포(`eodaego-ai`) 전체 — AI 서버 담당자 1인이 전담.
 - 절대 건드리면 안 되는 영역: `eodaego-server`(BE, Spring Boot), `eodaego-FE`(Flutter) — 별도 레포·별도 담당자이며, 이 레포 세션에서는 참고(read-only)만 한다. `docs/superpowers/`, `.issue/`, `.report/`는 의사결정·이력 기록용이므로 기존 문서를 임의로 재작성하지 않는다(새 문서 추가는 가능).
