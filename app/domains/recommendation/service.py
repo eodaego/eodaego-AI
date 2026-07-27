@@ -34,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
 _RECOMMENDATION_PROMPT_TRIGGER = (
-    "위 지침과 후보 목록을 참고해 지정된 JSON 스키마 형식으로 추천 코스 3개를 생성하라."
+    "위 지침과 후보 목록을 참고해 지정된 JSON 스키마 형식으로 추천 코스 3개를 생성하라. "
+    "각 코스의 estimated_duration_minutes(분 단위 예상 소요시간)는 방문지 수·시설 유형·이동을 "
+    "종합적으로 고려해 추정하라. 위 희망 체류 시간과는 독립적인 값이므로 그 값을 그대로 "
+    "반복하지 마라."
 )
 _NOT_SPECIFIED = "지정하지 않음"
 _RECOMMENDATION_RESPONSE_SCHEMA = LlmRecommendationResponse.model_json_schema()
@@ -182,7 +185,7 @@ def _build_recommendation_prompt(data: RecommendationRoutesRequest) -> str:
     return (
         "이번 요청의 조건:\n"
         f"- 선호 태그: {preference_tags_text}\n"
-        f"- 예상 체류 시간: {stay_duration_text}\n"
+        f"- 희망 체류 시간: {stay_duration_text}\n"
         f"- 동반자 유형 고려사항: {companion_text}\n\n"
         f"{_RECOMMENDATION_PROMPT_TRIGGER}"
     )

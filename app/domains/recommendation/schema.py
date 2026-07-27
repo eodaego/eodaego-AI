@@ -126,12 +126,12 @@ class LlmCourse(BaseModel):
         max_length=3,
         examples=[["동물듬뿍", "산책하기 좋은 코스"]],
     )
-    estimated_duration_minutes: int = Field(
-        description=_ESTIMATED_DURATION_MINUTES_DESC, ge=1, le=600, examples=[120]
-    )
     facility_ids: list[int] = Field(
         description="입구/출구를 제외한 중간 방문지 facility_id 목록(순서 무관).",
         max_length=20,
+    )
+    estimated_duration_minutes: int = Field(
+        description=_ESTIMATED_DURATION_MINUTES_DESC, ge=1, le=600, examples=[120]
     )
 
 
