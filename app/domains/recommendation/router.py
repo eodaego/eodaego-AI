@@ -54,7 +54,7 @@ _MAPPING_NOT_FOUND_RESPONSE = error_response(
         ),
         502: error_response(
             "BAD_GATEWAY",
-            "SUH-AIder /api/chat 호출 실패 (status=500)",
+            "SUH-AIder 호출 실패 (status=500)",
             "SUH-AIder 호출이 실패했거나 응답을 기대한 구조(courses)로 파싱할 수 없음 "
             "(1회 내부 재시도 후에도 실패)",
         ),

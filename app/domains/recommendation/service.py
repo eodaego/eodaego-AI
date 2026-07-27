@@ -33,6 +33,10 @@ from app.domains.weather.service import get_latest_weather_snapshot
 logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
+_RECOMMENDATION_PROMPT_TRIGGER = (
+    "위 지침과 후보 목록을 참고해 지정된 JSON 스키마 형식으로 추천 코스 3개를 생성하라."
+)
+_RECOMMENDATION_RESPONSE_SCHEMA = LlmRecommendationResponse.model_json_schema()
 _COURSE_LABELS: tuple[Literal["A", "B", "C"], ...] = ("A", "B", "C")
 _ENTRANCE_CATEGORY = "출입문"
 _MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
@@ -317,14 +321,18 @@ def _generate_recommendation_with_prompt(
             sorted(missing_vars),
         )
     system_content = template.safe_substitute(variables)
-    messages = [{"role": "system", "content": system_content}]
     facilities_by_id = {facility.id: facility for facility in candidates}
     valid_facility_ids = set(facilities_by_id.keys())
 
     last_error = RuntimeError("추천 생성 실패")
     for _ in range(_MAX_ATTEMPTS):
         try:
-            content = call_chat(model=prompt.model, messages=messages)
+            content = call_chat(
+                model=prompt.model,
+                system=system_content,
+                prompt=_RECOMMENDATION_PROMPT_TRIGGER,
+                response_format=_RECOMMENDATION_RESPONSE_SCHEMA,
+            )
             return _parse_llm_response(
                 content, valid_facility_ids, entrance, exit_facility, facilities_by_id
             )
