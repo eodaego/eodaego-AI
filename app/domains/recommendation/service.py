@@ -271,6 +271,7 @@ def _parse_llm_response(
                 title=llm_course.title,
                 reason=llm_course.reason,
                 tag_labels=llm_course.tag_labels,
+                estimated_duration_minutes=llm_course.estimated_duration_minutes,
                 stops=stops,
             )
         )
