@@ -8,7 +8,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 _CONNECT_TIMEOUT_SECONDS = 5
-_READ_TIMEOUT_SECONDS = 60
+_READ_TIMEOUT_SECONDS = 120
 _CHAT_PATH = "/api/flask/ollama/chat"
 _MODELS_PATH = "/api/flask/ollama/models"
 
