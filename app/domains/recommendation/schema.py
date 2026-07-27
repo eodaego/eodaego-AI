@@ -108,6 +108,8 @@ class RecommendationRoutesResponse(BaseModel):
 # LLM에게 생성을 맡기지 않고 서비스가 배열 순서로 결정론적으로 부여하므로 이 스키마에는
 # 포함하지 않는다.
 class LlmCourse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(description="코스 제목.")
     reason: str = Field(description="이 코스를 추천하는 이유.")
     tag_labels: list[str] = Field(
@@ -123,6 +125,8 @@ class LlmCourse(BaseModel):
 
 
 class LlmRecommendationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     courses: list[LlmCourse] = Field(
         description="LLM이 구성한 코스 목록(방문 순서 미포함). 정확히 3개여야 한다.",
         min_length=3,
