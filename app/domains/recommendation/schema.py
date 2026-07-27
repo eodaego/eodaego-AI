@@ -78,6 +78,11 @@ _LABEL_DESC = (
     "응답 배열 순서(첫 번째=A, 두 번째=B, 세 번째=C)에 따라 결정론적으로 부여한다."
 )
 
+_ESTIMATED_DURATION_MINUTES_DESC = (
+    "이 코스를 완료하는 데 걸리는 총 예상 소요시간(분). 정류지 수·시설 유형·이동을 고려해 "
+    "추정하며, stay_duration_minutes(희망 체류시간)와는 독립적인 값이다."
+)
+
 
 class RecommendedCourse(BaseModel):
     label: Literal["A", "B", "C"] = Field(description=_LABEL_DESC, examples=["A"])
@@ -88,6 +93,9 @@ class RecommendedCourse(BaseModel):
         min_length=1,
         max_length=3,
         examples=[["동물듬뿍", "산책하기 좋은 코스"]],
+    )
+    estimated_duration_minutes: int = Field(
+        description=_ESTIMATED_DURATION_MINUTES_DESC, ge=1, le=600, examples=[120]
     )
     stops: list[RouteStop] = Field(
         description="방문 순서대로 정렬된 정류지 목록(입구는 order=1, 출구는 마지막 order로 포함)."
@@ -117,6 +125,9 @@ class LlmCourse(BaseModel):
         min_length=1,
         max_length=3,
         examples=[["동물듬뿍", "산책하기 좋은 코스"]],
+    )
+    estimated_duration_minutes: int = Field(
+        description=_ESTIMATED_DURATION_MINUTES_DESC, ge=1, le=600, examples=[120]
     )
     facility_ids: list[int] = Field(
         description="입구/출구를 제외한 중간 방문지 facility_id 목록(순서 무관).",
