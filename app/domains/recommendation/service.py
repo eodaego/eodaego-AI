@@ -36,6 +36,7 @@ _MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
 _RECOMMENDATION_PROMPT_TRIGGER = (
     "위 지침과 후보 목록을 참고해 지정된 JSON 스키마 형식으로 추천 코스 3개를 생성하라."
 )
+_NOT_SPECIFIED = "지정하지 않음"
 _RECOMMENDATION_RESPONSE_SCHEMA = LlmRecommendationResponse.model_json_schema()
 _COURSE_LABELS: tuple[Literal["A", "B", "C"], ...] = ("A", "B", "C")
 _ENTRANCE_CATEGORY = "출입문"
@@ -132,13 +133,12 @@ def _format_facility_candidate(facility: Facility) -> str:
     )
 
 
-def _build_prompt_variables(
+def _build_system_variables(
     candidates: list[Facility],
     entrance: Facility,
     exit_facility: Facility,
     weather: WeatherSnapshot | None,
     congestion: CongestionSnapshot | None,
-    data: RecommendationRoutesRequest,
 ) -> dict[str, str]:
     candidates_text = "\n".join(_format_facility_candidate(f) for f in candidates)
     weather_text = (
@@ -152,22 +152,40 @@ def _build_prompt_variables(
         if congestion is not None
         else "혼잡도 정보 없음"
     )
-    variables = {
+    return {
         "candidates": candidates_text,
         "weather": weather_text,
         "congestion": congestion_text,
         "entrance": _format_facility_candidate(entrance),
         "exit": _format_facility_candidate(exit_facility),
     }
-    # 사용자가 선택하지 않은 항목은 프롬프트 변수 자체를 생략한다(safe_substitute는 매핑에
-    # 없는 자리표시자를 에러 없이 그대로 남기므로, 빈 문자열 등 임의 기본값을 넣지 않는다).
-    if data.preference_tags:
-        variables["preference_tags"] = ", ".join(data.preference_tags)
-    if data.stay_duration_minutes is not None:
-        variables["stay_duration_minutes"] = str(data.stay_duration_minutes)
-    if data.companion_type is not None:
-        variables["companion_type"] = _COMPANION_TYPE_HINTS[data.companion_type]
-    return variables
+
+
+def _build_recommendation_prompt(data: RecommendationRoutesRequest) -> str:
+    # 후보 목록·날씨 등 안정적인 데이터는 system(템플릿)에 두고, 요청마다 있을 수도 없을 수도
+    # 있는 조건은 여기 prompt에 항상 같은 형태(값이 없으면 "지정하지 않음")로 담는다 — system
+    # 쪽에 이 조건들을 치환해 넣었을 때 특정 조합에서 SUH-AIder가 빈 응답을 반환하는 현상이
+    # 확인되어(이슈 #46), system 템플릿 형태는 항상 동일하게 유지하고 조건은 prompt로 분리했다.
+    preference_tags_text = (
+        ", ".join(data.preference_tags) if data.preference_tags else _NOT_SPECIFIED
+    )
+    stay_duration_text = (
+        f"{data.stay_duration_minutes}분"
+        if data.stay_duration_minutes is not None
+        else _NOT_SPECIFIED
+    )
+    companion_text = (
+        _COMPANION_TYPE_HINTS[data.companion_type]
+        if data.companion_type is not None
+        else _NOT_SPECIFIED
+    )
+    return (
+        "이번 요청의 조건:\n"
+        f"- 선호 태그: {preference_tags_text}\n"
+        f"- 예상 체류 시간: {stay_duration_text}\n"
+        f"- 동반자 유형 고려사항: {companion_text}\n\n"
+        f"{_RECOMMENDATION_PROMPT_TRIGGER}"
+    )
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -306,9 +324,7 @@ def _generate_recommendation_with_prompt(
     congestion_snapshots = list_congestion_snapshots(db, limit=1)
     congestion = congestion_snapshots[0] if congestion_snapshots else None
 
-    variables = _build_prompt_variables(
-        candidates, entrance, exit_facility, weather, congestion, data
-    )
+    variables = _build_system_variables(candidates, entrance, exit_facility, weather, congestion)
     template = Template(prompt.template_text)
     missing_vars = template.get_identifiers() - variables.keys()
     if missing_vars:
@@ -321,6 +337,7 @@ def _generate_recommendation_with_prompt(
             sorted(missing_vars),
         )
     system_content = template.safe_substitute(variables)
+    recommendation_prompt = _build_recommendation_prompt(data)
     facilities_by_id = {facility.id: facility for facility in candidates}
     valid_facility_ids = set(facilities_by_id.keys())
 
@@ -330,7 +347,7 @@ def _generate_recommendation_with_prompt(
             content = call_chat(
                 model=prompt.model,
                 system=system_content,
-                prompt=_RECOMMENDATION_PROMPT_TRIGGER,
+                prompt=recommendation_prompt,
                 response_format=_RECOMMENDATION_RESPONSE_SCHEMA,
             )
             return _parse_llm_response(
