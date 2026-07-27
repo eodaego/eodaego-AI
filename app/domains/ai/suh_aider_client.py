@@ -38,6 +38,7 @@ def call_chat(
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
         if payload.get("success") is False:
+            logger.warning("SUH-AIder %s 응답 실패 (payload=%s)", _CHAT_PATH, str(payload)[:200])
             raise RuntimeError(f"SUH-AIder {_CHAT_PATH} 응답 실패 (success=false)")
         return str(payload["content"])
     except requests.RequestException as exc:
@@ -65,6 +66,7 @@ def list_models() -> dict[str, Any]:
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
         if payload.get("success") is False:
+            logger.warning("SUH-AIder %s 응답 실패 (payload=%s)", _MODELS_PATH, str(payload)[:200])
             raise RuntimeError(f"SUH-AIder {_MODELS_PATH} 응답 실패 (success=false)")
         return payload
     except requests.RequestException as exc:
