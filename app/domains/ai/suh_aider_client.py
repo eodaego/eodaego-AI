@@ -14,7 +14,11 @@ _MODELS_PATH = "/api/flask/ollama/models"
 
 
 def call_chat(
-    model: str, system: str, prompt: str, response_format: dict[str, Any] | None = None
+    model: str,
+    system: str,
+    prompt: str,
+    response_format: dict[str, Any] | None = None,
+    images: list[str] | None = None,
 ) -> str:
     settings = get_settings()
     url = f"{settings.suh_aider_base_url.rstrip('/')}{_CHAT_PATH}"
@@ -28,6 +32,8 @@ def call_chat(
     }
     if response_format is not None:
         body["format"] = response_format
+    if images is not None:
+        body["images"] = images
     try:
         response = requests.post(
             url,
