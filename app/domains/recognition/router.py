@@ -58,7 +58,7 @@ def identify_photo(
         detail = "image는 image/* 형식이어야 합니다"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
 
-    image_bytes = image.file.read()
+    image_bytes = image.file.read(_MAX_IMAGE_SIZE_BYTES + 1)
     if len(image_bytes) > _MAX_IMAGE_SIZE_BYTES:
         detail = "image 크기는 10MB를 초과할 수 없습니다"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)

@@ -1,6 +1,7 @@
 import base64
 import logging
 from string import Template
+from typing import assert_never
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
@@ -70,11 +71,13 @@ def _build_candidates(db: Session, catalog_type: CatalogType) -> tuple[dict[int,
         candidates_by_id = {p.id: p.name for p in plants}
         candidates_text = "\n".join(_format_plant_candidate(p) for p in plants)
         return candidates_by_id, candidates_text
-    stmt = select(Facility).where(Facility.facility_type.in_(_PLACE_FACILITY_TYPES))
-    facilities = list(db.scalars(stmt).all())
-    candidates_by_id = {f.id: f.name for f in facilities}
-    candidates_text = "\n".join(_format_place_candidate(f) for f in facilities)
-    return candidates_by_id, candidates_text
+    if catalog_type == "PLACE":
+        stmt = select(Facility).where(Facility.facility_type.in_(_PLACE_FACILITY_TYPES))
+        facilities = list(db.scalars(stmt).all())
+        candidates_by_id = {f.id: f.name for f in facilities}
+        candidates_text = "\n".join(_format_place_candidate(f) for f in facilities)
+        return candidates_by_id, candidates_text
+    assert_never(catalog_type)
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -142,6 +145,8 @@ def identify_photo(
                 catalog_id=parsed.catalog_id,
                 name=candidates_by_id[parsed.catalog_id],
             )
+        if parsed.matched:
+            logger.warning("LLM 응답에 존재하지 않는 catalog_id가 포함됨: %s", parsed.catalog_id)
         return PhotoRecognitionResponse(
             matched=False, catalog_type=catalog_type, catalog_id=None, name=None
         )
