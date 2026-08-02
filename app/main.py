@@ -17,6 +17,7 @@ from app.domains.crawling.router import router as crawling_router
 from app.domains.event.router import router as event_router
 from app.domains.facility.router import router as facility_router
 from app.domains.prompt.router import router as prompt_router
+from app.domains.recognition.router import router as recognition_router
 from app.domains.recommendation.router import router as recommendation_router
 from app.domains.weather.router import router as weather_router
 from app.scheduler.registry import JOB_REGISTRY, bootstrap_scheduler
@@ -88,6 +89,11 @@ app = FastAPI(
             "description": "서울 열린데이터광장 공공API 기반 어린이대공원 행사·공연 정보 조회 "
             "(조회 전용, 수집은 crawl_event 스케줄 job이 담당)",
         },
+        {
+            "name": "recognition",
+            "description": "사진 기반 동식물·장소 도감 인식 (BE가 촬영 대상 타입과 사진을 "
+            "전달하면 매칭되는 도감 항목 ID를 반환)",
+        },
     ],
     lifespan=lifespan,
 )
@@ -101,6 +107,7 @@ app.include_router(catalog_router)
 app.include_router(facility_router)
 app.include_router(weather_router)
 app.include_router(event_router)
+app.include_router(recognition_router)
 
 
 @app.get("/health")
