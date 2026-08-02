@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.kst import KstDatetime
 
-PromptPurpose = Literal["chat", "recommendation"]
+PromptPurpose = Literal["chat", "recommendation", "photo_recognition"]
 
 _NAME_DESC = (
     "템플릿 식별용 이름. DB에 유니크 제약이 걸려 있으며, 중복 생성 시 별도 처리 없이 "
@@ -16,7 +16,8 @@ _MODEL_DESC = (
 )
 _PURPOSE_DESC = (
     "이 템플릿이 사용되는 용도. 'chat'은 POST /api/v1/ai/chat, 'recommendation'은 "
-    "POST /api/v1/recommendation/routes에서 사용된다. 활성 템플릿(is_active=true)은 "
+    "POST /api/v1/recommendation/routes, 'photo_recognition'은 "
+    "POST /api/v1/recognition/identify에서 사용된다. 활성 템플릿(is_active=true)은 "
     "용도(purpose)별로 각각 최대 1개까지 존재할 수 있다(용도가 다르면 동시에 활성화 가능)."
 )
 _TEMPLATE_TEXT_DESC = (
