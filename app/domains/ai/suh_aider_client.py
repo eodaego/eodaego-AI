@@ -34,6 +34,15 @@ def call_chat(
         body["format"] = response_format
     if images is not None:
         body["images"] = images
+    logger.info(
+        "SUH-AIder %s 요청: model=%s, format=%s, images=%d개\n[system]\n%s\n[prompt]\n%s",
+        _CHAT_PATH,
+        model,
+        "있음" if response_format is not None else "없음",
+        len(images) if images is not None else 0,
+        system,
+        prompt,
+    )
     try:
         response = requests.post(
             url,
@@ -43,15 +52,23 @@ def call_chat(
         )
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
+        logger.info(
+            "SUH-AIder %s 응답: success=%s, model=%s, metrics=%s\n[content]\n%s",
+            _CHAT_PATH,
+            payload.get("success"),
+            payload.get("model"),
+            payload.get("metrics"),
+            payload.get("content"),
+        )
         if payload.get("success") is False:
-            logger.warning("SUH-AIder %s 응답 실패 (payload=%s)", _CHAT_PATH, str(payload)[:200])
+            logger.warning("SUH-AIder %s 응답 실패 (payload=%s)", _CHAT_PATH, payload)
             raise RuntimeError(f"SUH-AIder {_CHAT_PATH} 응답 실패 (success=false)")
         return str(payload["content"])
     except requests.RequestException as exc:
         status_code = getattr(exc.response, "status_code", "unknown")
-        body_summary = getattr(exc.response, "text", "")[:200]
+        body_text = getattr(exc.response, "text", "")
         logger.warning(
-            "SUH-AIder %s 호출 실패 (status=%s, body=%s)", _CHAT_PATH, status_code, body_summary
+            "SUH-AIder %s 호출 실패 (status=%s, body=%s)", _CHAT_PATH, status_code, body_text
         )
         raise RuntimeError(f"SUH-AIder {_CHAT_PATH} 호출 실패 (status={status_code})") from exc
     except (KeyError, TypeError, AttributeError) as exc:
