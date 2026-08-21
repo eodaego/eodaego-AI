@@ -49,14 +49,15 @@ _MAPPING_NOT_FOUND_RESPONSE = error_response(
         503: error_response(
             "SERVICE_UNAVAILABLE",
             "활성화된 추천 프롬프트가 없습니다",
-            "purpose='recommendation'이고 is_active=true인 프롬프트 템플릿이 하나도 없음 — "
-            "POST 또는 PATCH /api/v1/prompts로 먼저 활성 템플릿을 만들어야 함",
+            "purpose='recommendation'이고 is_active=true인 프롬프트 템플릿이 하나도 없거나(POST "
+            "또는 PATCH /api/v1/prompts로 먼저 활성 템플릿을 만들어야 함), 활성 템플릿에 "
+            "is_enabled=true인 LLM provider가 하나도 없음",
         ),
         502: error_response(
             "BAD_GATEWAY",
-            "SUH-AIder 호출 실패 (status=500)",
-            "SUH-AIder 호출이 실패했거나 응답을 기대한 구조(courses)로 파싱할 수 없음 "
-            "(1회 내부 재시도 후에도 실패)",
+            "구성된 LLM provider 호출이 모두 실패했습니다",
+            "활성 프롬프트 템플릿에 등록된 LLM provider(우선순위 순)를 각 1회씩 시도했지만 "
+            "모두 호출 실패했거나 응답을 기대한 구조(courses)로 파싱할 수 없음",
         ),
     },
 )

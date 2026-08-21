@@ -4,6 +4,7 @@ from string import Template
 from typing import assert_never
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -125,7 +126,11 @@ def identify_photo(
     )
 
     def _parse(content: str) -> LlmPhotoRecognitionResponse:
-        return LlmPhotoRecognitionResponse.model_validate_json(_strip_markdown_fences(content))
+        try:
+            return LlmPhotoRecognitionResponse.model_validate_json(_strip_markdown_fences(content))
+        except ValidationError:
+            logger.warning("사진 인식 LLM 응답 파싱 실패", exc_info=True)
+            raise
 
     try:
         parsed, _, _ = call_with_fallback(
