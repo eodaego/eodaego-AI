@@ -4,6 +4,7 @@ from typing import Any
 import requests
 
 from app.core.config import get_settings
+from app.core.llm_types import ImageInput
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ def call_chat(
     system: str,
     prompt: str,
     response_format: dict[str, Any] | None = None,
-    images: list[str] | None = None,
+    images: list[ImageInput] | None = None,
 ) -> str:
     settings = get_settings()
     url = f"{settings.suh_aider_base_url.rstrip('/')}{_CHAT_PATH}"
@@ -33,7 +34,7 @@ def call_chat(
     if response_format is not None:
         body["format"] = response_format
     if images is not None:
-        body["images"] = images
+        body["images"] = [image.base64_data for image in images]
     logger.info(
         "SUH-AIder %s 요청: model=%s, format=%s, images=%d개\n[system]\n%s\n[prompt]\n%s",
         _CHAT_PATH,
