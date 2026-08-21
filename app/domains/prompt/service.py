@@ -1,8 +1,14 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domains.prompt.model import PromptTemplate
-from app.domains.prompt.schema import PromptPurpose, PromptTemplateCreate, PromptTemplateUpdate
+from app.domains.prompt.model import PromptTemplate, PromptTemplateProvider
+from app.domains.prompt.schema import (
+    PromptPurpose,
+    PromptTemplateCreate,
+    PromptTemplateProviderCreate,
+    PromptTemplateProviderUpdate,
+    PromptTemplateUpdate,
+)
 
 
 def _deactivate_other_prompt_templates(db: Session, exclude_id: int, purpose: str) -> None:
@@ -55,4 +61,42 @@ def update_prompt_template(
 
 def delete_prompt_template(db: Session, prompt: PromptTemplate) -> None:
     db.delete(prompt)
+    db.commit()
+
+
+def create_prompt_template_provider(
+    db: Session, prompt: PromptTemplate, data: PromptTemplateProviderCreate
+) -> PromptTemplateProvider:
+    provider = PromptTemplateProvider(prompt_template_id=prompt.id, **data.model_dump())
+    db.add(provider)
+    db.commit()
+    db.refresh(provider)
+    return provider
+
+
+def list_prompt_template_providers(db: Session, prompt_id: int) -> list[PromptTemplateProvider]:
+    stmt = (
+        select(PromptTemplateProvider)
+        .where(PromptTemplateProvider.prompt_template_id == prompt_id)
+        .order_by(PromptTemplateProvider.priority, PromptTemplateProvider.id)
+    )
+    return list(db.scalars(stmt).all())
+
+
+def get_prompt_template_provider(db: Session, provider_id: int) -> PromptTemplateProvider | None:
+    return db.get(PromptTemplateProvider, provider_id)
+
+
+def update_prompt_template_provider(
+    db: Session, provider: PromptTemplateProvider, data: PromptTemplateProviderUpdate
+) -> PromptTemplateProvider:
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(provider, field, value)
+    db.commit()
+    db.refresh(provider)
+    return provider
+
+
+def delete_prompt_template_provider(db: Session, provider: PromptTemplateProvider) -> None:
+    db.delete(provider)
     db.commit()
