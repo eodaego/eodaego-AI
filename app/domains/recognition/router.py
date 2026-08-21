@@ -39,9 +39,9 @@ _MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
         ),
         502: error_response(
             "BAD_GATEWAY",
-            "SUH-AIder 호출 실패 (status=500)",
-            "SUH-AIder 호출이 실패했거나 응답을 기대한 구조(matched/catalog_id)로 파싱할 수 "
-            "없음(1회 내부 재시도 후에도 실패)",
+            "구성된 LLM provider 호출이 모두 실패했습니다",
+            "활성 프롬프트 템플릿에 등록된 LLM provider(우선순위 순)를 각 1회씩 시도했지만 "
+            "모두 호출 실패했거나 응답을 기대한 구조(matched/catalog_id)로 파싱하지 못함",
         ),
     },
 )
@@ -63,4 +63,4 @@ def identify_photo(
         detail = "image 크기는 10MB를 초과할 수 없습니다"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
 
-    return service.identify_photo(db, catalog_type, image_bytes)
+    return service.identify_photo(db, catalog_type, image_bytes, image.content_type)

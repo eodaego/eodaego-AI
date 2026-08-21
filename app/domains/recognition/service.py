@@ -4,11 +4,11 @@ from string import Template
 from typing import assert_never
 
 from fastapi import HTTPException, status
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domains.ai.suh_aider_client import call_chat
+from app.core.llm_types import ImageInput
+from app.domains.ai.llm_router import call_with_fallback
 from app.domains.catalog.model import Animal, Plant
 from app.domains.catalog.service import list_animals, list_plants
 from app.domains.facility.model import Facility
@@ -21,7 +21,6 @@ from app.domains.recognition.schema import (
 
 logger = logging.getLogger(__name__)
 
-_MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
 _PLACE_FACILITY_TYPES = ("문화", "음식", "카페")
 _MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
     200  # 도감 데이터의 자유 텍스트 설명이 프롬프트를 과도하게 지배하지 않도록 제한
@@ -93,11 +92,16 @@ def _strip_markdown_fences(text: str) -> str:
 
 
 def identify_photo(
-    db: Session, catalog_type: CatalogType, image_bytes: bytes
+    db: Session, catalog_type: CatalogType, image_bytes: bytes, image_content_type: str
 ) -> PhotoRecognitionResponse:
     prompt = get_active_prompt_template(db, purpose="photo_recognition")
     if prompt is None:
         detail = "활성화된 사진 인식 프롬프트가 없습니다"
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+
+    providers = [(p.provider, p.model) for p in prompt.providers if p.is_enabled]
+    if not providers:
+        detail = "사용 가능한 LLM provider가 없습니다"
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
     candidates_by_id, candidates_text = _build_candidates(db, catalog_type)
@@ -115,42 +119,35 @@ def identify_photo(
             sorted(missing_vars),
         )
     system_content = template.safe_substitute(variables)
-    image_base64 = base64.b64encode(image_bytes).decode("ascii")
+    image_input = ImageInput(
+        base64_data=base64.b64encode(image_bytes).decode("ascii"),
+        mime_type=image_content_type,
+    )
 
-    last_error = RuntimeError("사진 인식 실패")
-    for _ in range(_MAX_ATTEMPTS):
-        try:
-            content = call_chat(
-                model=prompt.model,
-                system=system_content,
-                prompt=_PHOTO_RECOGNITION_PROMPT_TRIGGER,
-                response_format=_PHOTO_RECOGNITION_RESPONSE_SCHEMA,
-                images=[image_base64],
-            )
-            parsed = LlmPhotoRecognitionResponse.model_validate_json(
-                _strip_markdown_fences(content)
-            )
-        except ValidationError as exc:
-            logger.warning("사진 인식 LLM 응답 파싱 실패", exc_info=True)
-            last_error = RuntimeError(f"사진 인식 LLM 응답 파싱 실패: {exc}")
-            continue
-        except RuntimeError as exc:
-            last_error = exc
-            continue
+    def _parse(content: str) -> LlmPhotoRecognitionResponse:
+        return LlmPhotoRecognitionResponse.model_validate_json(_strip_markdown_fences(content))
 
-        if parsed.matched and parsed.catalog_id in candidates_by_id:
-            return PhotoRecognitionResponse(
-                matched=True,
-                catalog_type=catalog_type,
-                catalog_id=parsed.catalog_id,
-                name=candidates_by_id[parsed.catalog_id],
-            )
-        if parsed.matched:
-            logger.warning("LLM 응답에 존재하지 않는 catalog_id가 포함됨: %s", parsed.catalog_id)
-        return PhotoRecognitionResponse(
-            matched=False, catalog_type=catalog_type, catalog_id=None, name=None
+    try:
+        parsed, _, _ = call_with_fallback(
+            providers=providers,
+            system=system_content,
+            prompt=_PHOTO_RECOGNITION_PROMPT_TRIGGER,
+            parse=_parse,
+            response_format=_PHOTO_RECOGNITION_RESPONSE_SCHEMA,
+            images=[image_input],
         )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY, detail=str(last_error)
-    ) from last_error
+    if parsed.matched and parsed.catalog_id in candidates_by_id:
+        return PhotoRecognitionResponse(
+            matched=True,
+            catalog_type=catalog_type,
+            catalog_id=parsed.catalog_id,
+            name=candidates_by_id[parsed.catalog_id],
+        )
+    if parsed.matched:
+        logger.warning("LLM 응답에 존재하지 않는 catalog_id가 포함됨: %s", parsed.catalog_id)
+    return PhotoRecognitionResponse(
+        matched=False, catalog_type=catalog_type, catalog_id=None, name=None
+    )
