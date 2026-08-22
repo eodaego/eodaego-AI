@@ -18,14 +18,14 @@ class AiChatRequest(BaseModel):
         description=(
             "활성 프롬프트의 system 메시지에 이어 전달할 사용자 메시지. "
             '생략(null)하거나 빈 문자열이면 기본 문구("위 지침에 따라 응답해줘.")가 대신 '
-            "SUH-AIder의 prompt로 전달된다."
+            "LLM provider의 prompt로 전달된다."
         ),
         examples=["오늘 날씨에 어울리는 코스를 추천해줘"],
     )
 
 
 class AiChatResponse(BaseModel):
-    content: str = Field(description="SUH-AIder가 생성한 응답 텍스트 원문")
+    content: str = Field(description="LLM이 생성한 응답 텍스트 원문")
 
 
 class SuhAiderModel(BaseModel):

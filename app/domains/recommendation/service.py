@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domains.ai.suh_aider_client import call_chat
+from app.domains.ai.llm_router import call_with_fallback
 from app.domains.crawling.model import CongestionSnapshot
 from app.domains.crawling.service import list_congestion_snapshots
 from app.domains.facility.model import Facility
@@ -32,7 +32,6 @@ from app.domains.weather.service import get_latest_weather_snapshot
 
 logger = logging.getLogger(__name__)
 
-_MAX_ATTEMPTS = 2  # 최초 시도 + 1회 재시도
 _RECOMMENDATION_PROMPT_TRIGGER = (
     "위 지침과 후보 목록을 참고해 지정된 JSON 스키마 형식으로 추천 코스 3개를 생성하라. "
     "각 코스의 estimated_duration_minutes(분 단위 예상 소요시간)는 방문지 수·시설 유형·이동을 "
@@ -312,7 +311,7 @@ def _save_recommendation_history_best_effort(
 
 def _generate_recommendation_with_prompt(
     db: Session, data: RecommendationRoutesRequest, prompt: PromptTemplate
-) -> RecommendationRoutesResponse:
+) -> tuple[RecommendationRoutesResponse, str]:
     entrance, exit_facility = _get_entrance_exit_facilities(
         db, data.entrance_facility_code, data.exit_facility_code
     )
@@ -345,23 +344,27 @@ def _generate_recommendation_with_prompt(
     facilities_by_id = {facility.id: facility for facility in candidates}
     valid_facility_ids = set(facilities_by_id.keys())
 
-    last_error = RuntimeError("추천 생성 실패")
-    for _ in range(_MAX_ATTEMPTS):
-        try:
-            content = call_chat(
-                model=prompt.model,
-                system=system_content,
-                prompt=recommendation_prompt,
-                response_format=_RECOMMENDATION_RESPONSE_SCHEMA,
-            )
-            return _parse_llm_response(
-                content, valid_facility_ids, entrance, exit_facility, facilities_by_id
-            )
-        except RuntimeError as exc:
-            last_error = exc
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY, detail=str(last_error)
-    ) from last_error
+    providers = [(p.provider, p.model) for p in prompt.providers if p.is_enabled]
+    if not providers:
+        detail = "사용 가능한 LLM provider가 없습니다"
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+
+    def _parse(content: str) -> RecommendationRoutesResponse:
+        return _parse_llm_response(
+            content, valid_facility_ids, entrance, exit_facility, facilities_by_id
+        )
+
+    try:
+        result, used_provider, used_model = call_with_fallback(
+            providers=providers,
+            system=system_content,
+            prompt=recommendation_prompt,
+            parse=_parse,
+            response_format=_RECOMMENDATION_RESPONSE_SCHEMA,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return result, f"{used_provider}:{used_model}"
 
 
 def generate_recommendation(
@@ -383,7 +386,7 @@ def generate_recommendation(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
     try:
-        result = _generate_recommendation_with_prompt(db, data, prompt)
+        result, used_model = _generate_recommendation_with_prompt(db, data, prompt)
     except HTTPException as exc:
         _save_recommendation_history_best_effort(
             db,
@@ -393,7 +396,7 @@ def generate_recommendation(
             failure_status_code=exc.status_code,
             failure_reason=str(exc.detail),
             prompt_template_id=prompt.id,
-            model=prompt.model,
+            model=None,
         )
         raise
 
@@ -405,6 +408,6 @@ def generate_recommendation(
         failure_status_code=None,
         failure_reason=None,
         prompt_template_id=prompt.id,
-        model=prompt.model,
+        model=used_model,
     )
     return result

@@ -18,20 +18,22 @@ router = APIRouter(
     "/chat",
     response_model=AiChatResponse,
     summary="AI 챗 응답 생성 (관리자 제어형)",
-    response_description="SUH-AIder가 생성한 응답 텍스트",
+    response_description="LLM이 생성한 응답 텍스트",
     responses={
         **COMMON_ERRORS,
         503: error_response(
             "SERVICE_UNAVAILABLE",
             "활성화된 프롬프트가 없습니다",
-            "is_active=true인 프롬프트 템플릿이 하나도 없음 — "
-            "POST 또는 PATCH /api/v1/prompts로 먼저 활성 템플릿을 만들어야 함",
+            "is_active=true인 프롬프트 템플릿이 하나도 없거나(POST 또는 PATCH /api/v1/prompts로 "
+            "먼저 활성 템플릿을 만들어야 함), 활성 템플릿에 is_enabled=true인 LLM provider가 "
+            "하나도 없음",
         ),
         502: error_response(
             "BAD_GATEWAY",
-            "SUH-AIder 호출 실패 (status=500)",
-            "SUH-AIder 호출이 실패했거나(연결 오류·타임아웃·4xx/5xx) "
-            "응답 바디에 content 필드가 없는 등 형식이 예상과 다름",
+            "구성된 LLM provider 호출이 모두 실패했습니다",
+            "활성 프롬프트 템플릿에 등록된 LLM provider(우선순위 순)를 각 1회씩 시도했지만 "
+            "모두 호출 실패했거나(연결 오류·타임아웃·4xx/5xx) 응답 바디에 content 필드가 없는 "
+            "등 형식이 예상과 다름",
         ),
     },
 )
@@ -44,7 +46,7 @@ def chat(data: AiChatRequest, db: Session = Depends(get_db)) -> AiChatResponse:
     2. 활성 프롬프트의 `template_text`에서 `$변수명` 자리표시자를 `variables`로 치환한다
        (`string.Template.safe_substitute` — 없는 변수는 무시되고 `$변수명` 그대로 남음).
     3. 치환된 텍스트를 system으로, user_message(없으면 기본 문구)를 prompt로 SUH-AIder에 전달한다.
-    4. SUH-AIder에 `{"model": <활성 프롬프트의 model>, "system": <치환된 system_content>,
+    4. SUH-AIder에 `{"model": <시도 중인 LLM provider의 model>, "system": <치환된 system_content>,
        "prompt": <user_message 또는 기본 문구>, "temperature": 0, "auto_unload": true}`로
        POST 요청한다(연결 타임아웃 5초, 읽기 타임아웃 60초).
     5. 호출 실패 또는 응답 형식 오류 시 502.
