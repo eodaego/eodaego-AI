@@ -2,15 +2,15 @@
 
 ## High-level architecture
 
-- 현재 시스템의 상위 구조: FE(Flutter) → BE(Spring Boot, `eodaego-server`) → AI(FastAPI, 이 레포) → 개인 LLM 서버(1순위) / Google Vertex AI(fallback, 순차 호출). 관리자 브라우저는 BE 내부 SSR 관리자 페이지(프롬프트·크롤링 스케줄 설정)만 접근하고, BE 서버 코드가 내부적으로 AI CRUD API를 호출한다. AI는 FE·관리자 브라우저 어디에도 직접 노출되지 않는다.
+- 현재 시스템의 상위 구조: FE(Flutter) → BE(Spring Boot, `eodaego-server`) → AI(FastAPI, 이 레포) → 개인 LLM 서버 SUH-AIder / Google Gemini(`llm_router`가 프롬프트 템플릿의 provider를 우선순위 순으로 순차 호출). 관리자 브라우저는 BE 내부 SSR 관리자 페이지(프롬프트·크롤링 스케줄 설정)만 접근하고, BE 서버 코드가 내부적으로 AI CRUD API를 호출한다. AI는 FE·관리자 브라우저 어디에도 직접 노출되지 않는다.
 - 주요 계층: `router`(HTTP 요청/응답 + 인증 dependency) → `service`(비즈니스 로직, DB 조작) → `model`(SQLAlchemy ORM) / `schema`(Pydantic DTO). `core/`는 도메인 무관 공통 기반(설정/인증/로깅/에러), `db/`는 엔진·세션 팩토리, `scheduler/`는 앱 기동 시 스케줄 재구성.
-- 외부 시스템 연동: 개인 LLM 서버(1순위) → Vertex AI(fallback) — `recommendation` 도메인 구현 예정, 아직 코드 없음. BE 관리자 API(도감 크롤링 결과 반영) — 아직 미구현.
+- 외부 시스템 연동: 개인 LLM 서버 SUH-AIder(`ai/suh_aider_client.py`)와 Google Gemini(`ai/gemini_client.py`, SDK 없이 REST 직접 호출, Vertex AI 아님)를 `ai/llm_router.py`의 `call_with_fallback`이 provider 우선순위대로 시도한다. 사진 판별(`recognition`)만 외부 Gemini(기본 모델 `gemini-3.6-flash`)를 쓰며 코드 기본 프롬프트(`recognition/default_prompt.py`)를 관리자 등록 `photo_recognition` 템플릿이 덮어쓴다. 챗·코스 추천(`recommendation`)의 기본 구성은 SUH-AIder(템플릿 provider로 변경 가능)다. BE 관리자 API(도감 크롤링 결과 반영) — 아직 미구현.
 
 ## Module boundaries
 
-- 각 주요 모듈의 책임: `app/domains/{ai,catalog,crawling,facility,prompt,weather}`는 각자 자신의 router/service/schema/model만 소유한다. `app/core`는 여러 도메인이 공유하는 횡단 관심사(설정/인증/로깅/에러)만 담고 도메인 로직을 갖지 않는다. `app/db`는 SQLAlchemy `Base`와 엔진/세션 팩토리만 제공한다. `app/scheduler`는 도메인의 실제 job 함수를 `JOB_REGISTRY`로 참조만 하고 크롤링 로직 자체는 갖지 않는다(각 도메인이 소유).
-- 모듈 간 허용 의존 방향: `domains → core, db` (단방향). `core`/`db`는 `domains`를 알지 못한다. `scheduler`는 `crawling` 도메인의 `ScheduleConfig` 모델만 참조하고, 실제 job 함수는 각 도메인이 `JOB_REGISTRY`에 등록하는 방식으로 역할을 분리한다(현재 `JOB_REGISTRY`는 비어있음 — `congestion_job`/`catalog_job` 미구현).
-- 금지 의존 관계: `core`/`db` → `domains` 의존 금지. 도메인 간 model/service 직접 import는 **단방향**(A가 B를 import하되 B는 A를 import하지 않는 방향)이면 허용한다(2026-07-11 결정: 도메인 간 의존을 100% 차단하는 것이 비현실적이라 판단 — 예: 향후 `recommendation` 도메인이 `weather`/`crawling`(혼잡도) 도메인의 조회 함수를 직접 import). **순환 의존은 금지** — B가 다시 A를 import하는 관계가 생기면 공용 로직을 `core`로 승격해 순환을 끊는다. 이 판단은 **도메인 단위**로 한다 — 예를 들어 A의 `service.py`가 B의 `service.py`를 import하고, B의 어떤 파일이든(`model.py` 포함) A의 어떤 파일이든 import하면 그 자체로 A↔B 순환으로 간주해 금지한다(모듈 단위로 쪼개 "이건 다른 파일이니 순환이 아니다"라고 판단하지 않는다).
+- 각 주요 모듈의 책임: `app/domains/{ai,catalog,crawling,event,facility,prompt,recognition,recommendation,weather}`는 각자 자신의 router/service/schema/model만 소유한다. `app/core`는 여러 도메인이 공유하는 횡단 관심사(설정/인증/로깅/에러)만 담고 도메인 로직을 갖지 않는다. `app/db`는 SQLAlchemy `Base`와 엔진/세션 팩토리만 제공한다. `app/scheduler`는 도메인의 실제 job 함수를 `JOB_REGISTRY`로 참조만 하고 크롤링 로직 자체는 갖지 않는다(각 도메인이 소유).
+- 모듈 간 허용 의존 방향: `domains → core, db` (단방향). `core`/`db`는 `domains`를 알지 못한다. `scheduler`는 `crawling` 도메인의 `ScheduleConfig` 모델만 참조하고, 실제 job 함수는 각 도메인이 `JOB_REGISTRY`에 등록하는 방식으로 역할을 분리한다(현재 `JOB_REGISTRY`에 `crawl_congestion`/`crawl_catalog`/`crawl_operating_hours`/`crawl_weather`/`crawl_event` 5개 등록).
+- 금지 의존 관계: `core`/`db` → `domains` 의존 금지. 도메인 간 model/service 직접 import는 **단방향**(A가 B를 import하되 B는 A를 import하지 않는 방향)이면 허용한다(2026-07-11 결정: 도메인 간 의존을 100% 차단하는 것이 비현실적이라 판단 — 예: `recommendation` 도메인이 `weather`/`crawling`(혼잡도) 도메인의 조회 함수를 직접 import). **순환 의존은 금지** — B가 다시 A를 import하는 관계가 생기면 공용 로직을 `core`로 승격해 순환을 끊는다. 이 판단은 **도메인 단위**로 한다 — 예를 들어 A의 `service.py`가 B의 `service.py`를 import하고, B의 어떤 파일이든(`model.py` 포함) A의 어떤 파일이든 import하면 그 자체로 A↔B 순환으로 간주해 금지한다(모듈 단위로 쪼개 "이건 다른 파일이니 순환이 아니다"라고 판단하지 않는다).
 
 ## Data flow
 

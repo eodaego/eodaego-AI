@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 CatalogType = Literal["ANIMAL", "PLANT", "PLACE"]
+PhotoConfidence = Literal["high", "medium", "low"]
 
 _CATALOG_TYPE_DESC = (
     "인식 대상 도감 타입. BE가 사진 촬영 대상을 미리 지정한다. "
@@ -27,8 +28,13 @@ class PhotoRecognitionResponse(BaseModel):
 
 # LLM 원시 응답 파싱 전용 내부 스키마. 공개 응답(PhotoRecognitionResponse)과 달리 name은
 # 서비스가 candidate 목록에서 catalog_id로 되찾아 채우므로 LLM에게 요구하지 않는다.
+# 필드 순서가 Gemini 구조화 출력의 생성 순서에 영향을 주므로 observation을 먼저 둔다.
 class LlmPhotoRecognitionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    observation: str = Field(
+        description="판정 전에 사진에서 실제로 보이는 특징을 한두 문장으로 먼저 서술한다."
+    )
+    confidence: PhotoConfidence = Field(description="판정 확신도. high/medium/low 중 하나.")
     matched: bool = Field(description="사진이 후보 목록 중 하나와 매칭됐는지 여부.")
     catalog_id: int | None = Field(description="매칭된 후보의 id. matched=false이면 null.")

@@ -9,7 +9,8 @@ from app.core.llm_types import ImageInput
 logger = logging.getLogger(__name__)
 
 _CONNECT_TIMEOUT_SECONDS = 5
-_READ_TIMEOUT_SECONDS = 120
+# BE의 AI 서버 read-timeout(prod 60초)보다 짧아야 BE가 먼저 포기하지 않는다
+_READ_TIMEOUT_SECONDS = 45
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
@@ -21,6 +22,8 @@ def call_chat(
     images: list[ImageInput] | None = None,
 ) -> str:
     settings = get_settings()
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY가 설정되지 않았습니다")
     url = f"{_BASE_URL}/models/{model}:generateContent"
     headers = {"Content-Type": "application/json", "x-goog-api-key": settings.gemini_api_key}
 
