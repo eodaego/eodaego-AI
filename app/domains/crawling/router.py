@@ -28,10 +28,11 @@ _SCHEDULE_CREATE_DESC = """크롤링 작업의 실행 주기를 DB에 등록한�
 
 **주의:** 이 API로 생성/수정한 스케줄은 즉시 반영되지 않는다. AI 서버가 재시작될 때
 (`bootstrap_scheduler`, 앱 기동 시 1회 실행)만 `is_active=true`인 설정이 실제 APScheduler에
-등록된다. `job_id`가 등록된 작업 식별자 4종(`crawl_congestion`/`crawl_catalog`/
-`crawl_operating_hours`/`crawl_weather`) 중 하나가 아니면 저장은 성공하지만 다음 재시작 시
-**로그 없이 조용히** 등록이 스킵된다. `trigger_config` 형식이 `trigger_type`과 맞지 않으면
-저장은 성공하지만 다음 재시작 시 트리거 생성에 실패해 **경고 로그를 남기고** 등록이 스킵된다.
+등록된다. `job_id`가 등록된 작업 식별자 5종(`crawl_congestion`/`crawl_catalog`/
+`crawl_operating_hours`/`crawl_weather`/`crawl_event`) 중 하나가 아니면 저장은 성공하지만
+다음 재시작 시 **로그 없이 조용히** 등록이 스킵된다. `trigger_config` 형식이
+`trigger_type`과 맞지 않으면 저장은 성공하지만 다음 재시작 시 트리거 생성에 실패해
+**경고 로그를 남기고** 등록이 스킵된다.
 
 `job_id`는 DB 유니크 제약이 있으며, 중복 생성 시 500이 발생한다(409로 매핑되지 않음)."""
 
