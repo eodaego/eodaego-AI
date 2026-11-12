@@ -43,7 +43,7 @@ _RECOMMENDATION_RESPONSE_SCHEMA = LlmRecommendationResponse.model_json_schema()
 _COURSE_LABELS: tuple[Literal["A", "B", "C"], ...] = ("A", "B", "C")
 _ENTRANCE_CATEGORY = "출입문"
 _MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
-    200  # 관리자 입력 자유 텍스트가 프롬프트를 과도하게 지배하지 않도록 제한
+    60  # SUH-AIder num_ctx(4096) 안에 입력+출력이 들어오도록 후보 한 줄의 길이를 제한
 )
 
 _COMPANION_TYPE_HINTS: dict[CompanionType, str] = {
@@ -127,7 +127,8 @@ def _get_entrance_exit_facilities(
 
 
 def _format_facility_candidate(facility: Facility) -> str:
-    location = f"({facility.latitude}, {facility.longitude})"
+    # 좌표는 후보 단계에서 None이 걸러져 항상 float이다. 소수점 4자리(약 10m)로 토큰을 아낀다.
+    location = f"({facility.latitude:.4f}, {facility.longitude:.4f})"
     description = (facility.intro or facility.description or "")[:_MAX_DESCRIPTION_LENGTH_IN_PROMPT]
     return (
         f"- id={facility.id}, name={facility.name}, category={facility.category}, "

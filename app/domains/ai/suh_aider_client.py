@@ -64,7 +64,17 @@ def call_chat(
         if payload.get("success") is False:
             logger.warning("SUH-AIder %s 응답 실패 (payload=%s)", _CHAT_PATH, payload)
             raise RuntimeError(f"SUH-AIder {_CHAT_PATH} 응답 실패 (success=false)")
-        return str(payload["content"])
+        content = str(payload["content"])
+        if not content.strip():
+            # 컨텍스트(num_ctx)가 입력으로 거의 소진되면 success=true인데 content가 빈 채로
+            # 오는 경우가 있어, 빈 응답을 성공으로 넘기지 않고 다음 provider로 fallback시킨다.
+            logger.warning(
+                "SUH-AIder %s 응답 content가 비어 있음 (metrics=%s)",
+                _CHAT_PATH,
+                payload.get("metrics"),
+            )
+            raise RuntimeError(f"SUH-AIder {_CHAT_PATH} 응답 content가 비어 있습니다")
+        return content
     except requests.RequestException as exc:
         status_code = getattr(exc.response, "status_code", "unknown")
         body_text = getattr(exc.response, "text", "")
