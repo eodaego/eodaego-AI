@@ -46,19 +46,6 @@ _MAPPING_NOT_FOUND_RESPONSE = error_response(
             "Facility.code와 일치하지 않거나 해당 Facility에 좌표 정보가 없어 처리 불가능한 "
             "경우다",
         ),
-        503: error_response(
-            "SERVICE_UNAVAILABLE",
-            "활성화된 추천 프롬프트가 없습니다",
-            "purpose='recommendation'이고 is_active=true인 프롬프트 템플릿이 하나도 없거나(POST "
-            "또는 PATCH /api/v1/prompts로 먼저 활성 템플릿을 만들어야 함), 활성 템플릿에 "
-            "is_enabled=true인 LLM provider가 하나도 없음",
-        ),
-        502: error_response(
-            "BAD_GATEWAY",
-            "구성된 LLM provider 호출이 모두 실패했습니다",
-            "활성 프롬프트 템플릿에 등록된 LLM provider(우선순위 순)를 각 1회씩 시도했지만 "
-            "모두 호출 실패했거나 응답을 기대한 구조(courses)로 파싱할 수 없음",
-        ),
     },
 )
 def create_route_recommendation(
@@ -69,21 +56,23 @@ def create_route_recommendation(
     선호 태그·체류 시간·동반자 유형은 선택 사항이다(생략 시 해당 조건 없이 추천).
 
     **처리 순서**
-    1. `purpose='recommendation'`이고 `is_active=true`인 프롬프트 템플릿을 조회한다. 없으면 503.
-    2. `entrance_facility_code`/`exit_facility_code`가 `category="출입문"`인 `Facility.code`와
+    1. `entrance_facility_code`/`exit_facility_code`가 `category="출입문"`인 `Facility.code`와
        일치하고 좌표 정보를 가지고 있는지 검증한다. 아니면 422.
-    3. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다(좌표가 없는 시설은
+    2. `preference_tags`에 매핑된 카테고리의 `Facility` 후보를 조회한다(좌표가 없는 시설은
        후보에서 제외된다). 선택하지 않았거나 빈 배열이면 매핑된 모든 카테고리를 대상으로
        조회한다. 0건이면 422.
-    4. 최신 날씨 스냅샷과 공원 전체 혼잡도를 조회한다.
-    5. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 SUH-AIder를 호출한다
-       (선택하지 않은 항목은 치환 변수에서 생략된다). LLM은 각 코스마다 입구/출구를 제외한
-       중간 방문지 facility_id만 결정한다.
-    6. 응답을 파싱/검증한다(존재하지 않거나 입구/출구인 facility_id를 중간 방문지로 잘못
+    3. `purpose='recommendation'`이고 `is_active=true`인 프롬프트 템플릿을 조회하고, 최신 날씨
+       스냅샷과 공원 전체 혼잡도를 조회한다.
+    4. 프롬프트 템플릿에 후보·입구·출구·날씨·혼잡도·사용자 입력을 치환해 활성 LLM provider를
+       우선순위 순으로 호출한다. LLM은 각 코스마다 입구/출구를 제외한 중간 방문지
+       facility_id만 결정한다.
+    5. 응답을 파싱/검증한다(존재하지 않거나 입구/출구인 facility_id를 중간 방문지로 잘못
        포함시켰거나, 한 코스 안에서 facility_id가 중복된 경우 실패로 간주). 실제 방문 순서는
        LLM이 아니라, 입구/출구 좌표를 고정하고 중간 방문지 간 직선거리 합을 최소화하는 서버
        알고리즘(최근접 이웃+2-opt)이 계산한다.
-    7. 5~6단계가 실패하면 1회 재시도하고, 그래도 실패하면 502.
+    6. 활성 프롬프트나 활성 provider가 없거나 모든 provider 호출/파싱이 실패하면, 오류 대신
+       서버 알고리즘이 동일한 응답 스키마로 A(관심 분야 균형)/B(최단 이동)/C(관심도 집중)
+       3개 코스를 생성해 반환한다. 이 경우 이력에 `model="algorithm:fallback"`으로 기록된다.
     """
     return service.generate_recommendation(db, data)
 

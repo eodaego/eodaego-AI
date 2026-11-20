@@ -15,6 +15,10 @@ from app.domains.facility.schema import FacilityResponse
 from app.domains.facility.service import get_facility_by_code, list_facilities
 from app.domains.prompt.model import PromptTemplate
 from app.domains.prompt.service import get_active_prompt_template
+from app.domains.recommendation.fallback import (
+    FallbackCandidate,
+    build_fallback_courses,
+)
 from app.domains.recommendation.model import PreferenceCategoryMapping, RecommendationHistory
 from app.domains.recommendation.route_optimizer import optimize_route
 from app.domains.recommendation.schema import (
@@ -42,6 +46,7 @@ _NOT_SPECIFIED = "지정하지 않음"
 _RECOMMENDATION_RESPONSE_SCHEMA = LlmRecommendationResponse.model_json_schema()
 _COURSE_LABELS: tuple[Literal["A", "B", "C"], ...] = ("A", "B", "C")
 _ENTRANCE_CATEGORY = "출입문"
+_ALGORITHM_FALLBACK_MODEL = "algorithm:fallback"
 _MAX_DESCRIPTION_LENGTH_IN_PROMPT = (
     60  # SUH-AIder num_ctx(4096) 안에 입력+출력이 들어오도록 후보 한 줄의 길이를 제한
 )
@@ -53,6 +58,14 @@ _COMPANION_TYPE_HINTS: dict[CompanionType, str] = {
     "WITH_FRIENDS": "액티비티, 넓은 동선, 활동형 장소",
     "WITH_ELDERLY": "짧은 이동, 평지 위주, 휴식 공간 자주 포함",
 }
+
+
+class _LlmUnavailableError(Exception):
+    """LLM으로 추천을 만들 수 없어 알고리즘 fallback으로 전환해야 함을 알리는 내부 예외."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 def create_preference_category_mapping(
@@ -211,6 +224,29 @@ def _require_coordinates(facility: Facility) -> tuple[float, float]:
     return latitude, longitude
 
 
+def _build_route_stops(
+    ordered_ids: list[int],
+    entrance: Facility,
+    exit_facility: Facility,
+    facilities_by_id: dict[int, Facility],
+) -> list[RouteStop]:
+    # 응답 조립 시 입구/출구까지 포함해 facility_id로 실제 Facility 객체를 되찾기 위한 맵
+    # (facilities_by_id는 중간 방문지 후보만 담고 있어 입구/출구가 빠져있다)
+    all_facilities_by_id: dict[int, Facility] = {
+        **facilities_by_id,
+        entrance.id: entrance,
+        exit_facility.id: exit_facility,
+    }
+    stop_ids = [entrance.id, *ordered_ids, exit_facility.id]
+    return [
+        RouteStop(
+            facility=FacilityResponse.model_validate(all_facilities_by_id[facility_id]),
+            order=order,
+        )
+        for order, facility_id in enumerate(stop_ids, start=1)
+    ]
+
+
 def _parse_llm_response(
     content: str,
     valid_facility_ids: set[int],
@@ -226,13 +262,6 @@ def _parse_llm_response(
 
     entrance_point = _require_coordinates(entrance)
     exit_point = _require_coordinates(exit_facility)
-    # 응답 조립 시 입구/출구까지 포함해 facility_id로 실제 Facility 객체를 되찾기 위한 맵
-    # (facilities_by_id는 중간 방문지 후보만 담고 있어 입구/출구가 빠져있다)
-    all_facilities_by_id: dict[int, Facility] = {
-        **facilities_by_id,
-        entrance.id: entrance,
-        exit_facility.id: exit_facility,
-    }
 
     courses: list[RecommendedCourse] = []
     for index, llm_course in enumerate(parsed.courses):
@@ -260,14 +289,7 @@ def _parse_llm_response(
             for facility_id in llm_course.facility_ids
         ]
         ordered_ids = optimize_route(start=entrance_point, end=exit_point, waypoints=waypoints)
-        stop_ids = [entrance.id, *ordered_ids, exit_facility.id]
-        stops = [
-            RouteStop(
-                facility=FacilityResponse.model_validate(all_facilities_by_id[facility_id]),
-                order=order,
-            )
-            for order, facility_id in enumerate(stop_ids, start=1)
-        ]
+        stops = _build_route_stops(ordered_ids, entrance, exit_facility, facilities_by_id)
         courses.append(
             RecommendedCourse(
                 label=_COURSE_LABELS[index],
@@ -310,9 +332,9 @@ def _save_recommendation_history_best_effort(
         logger.warning("추천 이력 저장 실패", exc_info=True)
 
 
-def _generate_recommendation_with_prompt(
-    db: Session, data: RecommendationRoutesRequest, prompt: PromptTemplate
-) -> tuple[RecommendationRoutesResponse, str]:
+def _load_course_inputs(
+    db: Session, data: RecommendationRoutesRequest
+) -> tuple[Facility, Facility, list[Facility]]:
     entrance, exit_facility = _get_entrance_exit_facilities(
         db, data.entrance_facility_code, data.exit_facility_code
     )
@@ -323,7 +345,17 @@ def _generate_recommendation_with_prompt(
         # starlette 최신 버전에서 HTTP_422_UNPROCESSABLE_ENTITY가 deprecated돼 이 이름을 쓴다
         # (값은 동일하게 422, 에러 코드 문자열도 여전히 UNPROCESSABLE_ENTITY로 나온다)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    return entrance, exit_facility, candidates
 
+
+def _generate_recommendation_with_prompt(
+    db: Session,
+    data: RecommendationRoutesRequest,
+    prompt: PromptTemplate,
+    entrance: Facility,
+    exit_facility: Facility,
+    candidates: list[Facility],
+) -> tuple[RecommendationRoutesResponse, str]:
     weather = get_latest_weather_snapshot(db)
     congestion_snapshots = list_congestion_snapshots(db, limit=1)
     congestion = congestion_snapshots[0] if congestion_snapshots else None
@@ -347,8 +379,7 @@ def _generate_recommendation_with_prompt(
 
     providers = [(p.provider, p.model) for p in prompt.providers if p.is_enabled]
     if not providers:
-        detail = "사용 가능한 LLM provider가 없습니다"
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+        raise _LlmUnavailableError("사용 가능한 LLM provider가 없습니다")
 
     def _parse(content: str) -> RecommendationRoutesResponse:
         return _parse_llm_response(
@@ -364,30 +395,72 @@ def _generate_recommendation_with_prompt(
             response_format=_RECOMMENDATION_RESPONSE_SCHEMA,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        raise _LlmUnavailableError(str(exc)) from exc
     return result, f"{used_provider}:{used_model}"
+
+
+def _tags_by_category(
+    db: Session, preference_tags: list[PreferenceTag] | None
+) -> dict[str, frozenset[str]]:
+    if not preference_tags:
+        return {}
+    stmt = select(
+        PreferenceCategoryMapping.preference_tag, PreferenceCategoryMapping.category
+    ).where(PreferenceCategoryMapping.preference_tag.in_(preference_tags))
+    tags: dict[str, set[str]] = {}
+    for preference_tag, category in db.execute(stmt).all():
+        tags.setdefault(category, set()).add(preference_tag)
+    return {category: frozenset(values) for category, values in tags.items()}
+
+
+def _generate_fallback_recommendation(
+    data: RecommendationRoutesRequest,
+    entrance: Facility,
+    exit_facility: Facility,
+    candidates: list[Facility],
+    tags_by_category: dict[str, frozenset[str]],
+) -> RecommendationRoutesResponse:
+    facilities_by_id = {facility.id: facility for facility in candidates}
+    fallback_candidates: list[FallbackCandidate] = []
+    for facility in candidates:
+        latitude, longitude = _require_coordinates(facility)
+        fallback_candidates.append(
+            FallbackCandidate(
+                facility_id=facility.id,
+                category=facility.category,
+                latitude=latitude,
+                longitude=longitude,
+                tags=tags_by_category.get(facility.category, frozenset()),
+            )
+        )
+    fallback_courses = build_fallback_courses(
+        _require_coordinates(entrance),
+        _require_coordinates(exit_facility),
+        fallback_candidates,
+        data.stay_duration_minutes,
+    )
+    courses = [
+        RecommendedCourse(
+            label=label,
+            title=course.title,
+            reason=course.reason,
+            tag_labels=list(course.tag_labels),
+            estimated_duration_minutes=course.estimated_duration_minutes,
+            stops=_build_route_stops(
+                list(course.ordered_facility_ids), entrance, exit_facility, facilities_by_id
+            ),
+        )
+        for label, course in zip(_COURSE_LABELS, fallback_courses, strict=True)
+    ]
+    return RecommendationRoutesResponse(courses=courses)
 
 
 def generate_recommendation(
     db: Session, data: RecommendationRoutesRequest
 ) -> RecommendationRoutesResponse:
     prompt = get_active_prompt_template(db, purpose="recommendation")
-    if prompt is None:
-        detail = "활성화된 추천 프롬프트가 없습니다"
-        _save_recommendation_history_best_effort(
-            db,
-            data,
-            is_success=False,
-            response=None,
-            failure_status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            failure_reason=detail,
-            prompt_template_id=None,
-            model=None,
-        )
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
-
     try:
-        result, used_model = _generate_recommendation_with_prompt(db, data, prompt)
+        entrance, exit_facility, candidates = _load_course_inputs(db, data)
     except HTTPException as exc:
         _save_recommendation_history_best_effort(
             db,
@@ -396,19 +469,48 @@ def generate_recommendation(
             response=None,
             failure_status_code=exc.status_code,
             failure_reason=str(exc.detail),
-            prompt_template_id=prompt.id,
+            prompt_template_id=prompt.id if prompt else None,
             model=None,
         )
         raise
 
+    unavailable_reason = "활성화된 추천 프롬프트가 없습니다"
+    if prompt is not None:
+        try:
+            result, used_model = _generate_recommendation_with_prompt(
+                db, data, prompt, entrance, exit_facility, candidates
+            )
+        except _LlmUnavailableError as exc:
+            unavailable_reason = exc.reason
+        else:
+            _save_recommendation_history_best_effort(
+                db,
+                data,
+                is_success=True,
+                response=result,
+                failure_status_code=None,
+                failure_reason=None,
+                prompt_template_id=prompt.id,
+                model=used_model,
+            )
+            return result
+
+    logger.warning("LLM 추천 불가로 알고리즘 fallback 전환: %s", unavailable_reason)
+    fallback_result = _generate_fallback_recommendation(
+        data,
+        entrance,
+        exit_facility,
+        candidates,
+        _tags_by_category(db, data.preference_tags),
+    )
     _save_recommendation_history_best_effort(
         db,
         data,
         is_success=True,
-        response=result,
+        response=fallback_result,
         failure_status_code=None,
-        failure_reason=None,
-        prompt_template_id=prompt.id,
-        model=used_model,
+        failure_reason=unavailable_reason,
+        prompt_template_id=None,
+        model=_ALGORITHM_FALLBACK_MODEL,
     )
-    return result
+    return fallback_result

@@ -18,7 +18,7 @@ def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> 
     return _EARTH_RADIUS_M * c
 
 
-def _route_length(
+def route_length_m(
     start: Coordinate, end: Coordinate, order: list[tuple[int, float, float]]
 ) -> float:
     points: list[Coordinate] = [start, *[(lat, lon) for _, lat, lon in order], end]
@@ -31,14 +31,14 @@ def _two_opt(
     if len(order) < 2:
         return order
     best = order
-    best_length = _route_length(start, end, best)
+    best_length = route_length_m(start, end, best)
     improved = True
     while improved:
         improved = False
         for i in range(len(best) - 1):
             for j in range(i + 1, len(best)):
                 candidate = best[:i] + list(reversed(best[i : j + 1])) + best[j + 1 :]
-                candidate_length = _route_length(start, end, candidate)
+                candidate_length = route_length_m(start, end, candidate)
                 if candidate_length < best_length:
                     best, best_length = candidate, candidate_length
                     improved = True

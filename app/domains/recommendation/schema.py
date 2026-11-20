@@ -30,7 +30,10 @@ _PREFERENCE_TAGS_DESC = (
     "ANIMAL/NATURE/ACTIVITY/RELAXATION/LEARNING만 매핑되어 있다), 매핑 테이블 자체가 비어 "
     "있으면 추천 후보 0건(422)이 될 수 있다."
 )
-_STAY_DURATION_MINUTES_DESC = "예상 체류 시간(분). 선택하지 않으면 프롬프트에서 이 조건이 생략된다."
+_STAY_DURATION_MINUTES_DESC = (
+    "예상 체류 시간(분). 선택하지 않으면 LLM에는 이 조건이 생략되며, 알고리즘 fallback은 "
+    "120분을 기본으로 사용한다."
+)
 _COMPANION_TYPE_DESC = (
     "동반자 유형. 단일 선택. ALONE(혼자 방문)/WITH_CHILD(아이와 함께)/"
     "WITH_PARTNER(연인과 함께)/WITH_FRIENDS(친구와 함께)/WITH_ELDERLY(어르신과 함께). "
@@ -70,7 +73,8 @@ class RouteStop(BaseModel):
 
 _TAG_LABELS_DESC = (
     "이 코스의 특징을 요약하는 짧은 태그 라벨 목록(예: '동물듬뿍', '산책하기 좋은 코스'). "
-    "LLM이 추천 동선을 고려해 자유 생성하며, 코스마다 최대 3개까지 포함한다."
+    "LLM이 추천 동선을 고려해 자유 생성하며(LLM 불가 시 알고리즘이 고정 템플릿으로 생성), "
+    "코스마다 최대 3개까지 포함한다."
 )
 
 _LABEL_DESC = (
